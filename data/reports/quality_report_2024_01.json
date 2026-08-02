@@ -1,9 +1,0 @@
-{
-  "records_processed": 2964624,
-  "records_valid": 2756936,
-  "records_quarantined": 207688,
-  "negative_fares": 37448,
-  "invalid_passengers": 31465,
-  "invalid_timestamps": 56,
-  "negative_distances": 0
-}
