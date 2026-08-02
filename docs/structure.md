@@ -1,3 +1,5 @@
+> This is the target layout. For which parts exist today vs. are still planned, see `docs/implementation-plan.md`.
+
 openscale-platform/
 
 ├── services/
