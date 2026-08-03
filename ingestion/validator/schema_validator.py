@@ -15,7 +15,7 @@ EXPECTED_COLUMNS = {
     "passenger_count": "float64",
     "trip_distance": "float64",
     "RatecodeID": "float64",
-    "store_and_fwd_flag": "str",
+    "store_and_fwd_flag": "object",
     "PULocationID": "int32",
     "DOLocationID": "int32",
     "payment_type": "int64",

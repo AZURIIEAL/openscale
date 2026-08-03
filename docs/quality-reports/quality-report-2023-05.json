@@ -1,0 +1,22 @@
+{
+  "period": "2023-05",
+  "records_processed": 3513649,
+  "records_accepted": 3420458,
+  "records_rejected": 1170,
+  "records_quarantined": 92021,
+  "duplicate_records": 0,
+  "invalid_timestamps": 1170,
+  "negative_fares": 32071,
+  "invalid_passenger_counts": 59627,
+  "distance_outliers": 135,
+  "negative_total_amounts": 188,
+  "records_flagged_pickup_year_mismatch": 5,
+  "records_flagged_dropoff_year_mismatch": 5,
+  "missing_value_counts": {
+    "passenger_count": 101796,
+    "RatecodeID": 101796,
+    "store_and_fwd_flag": 101796,
+    "congestion_surcharge": 101796,
+    "Airport_fee": 101796
+  }
+}

@@ -1,17 +1,17 @@
 """
-Shared helper for loading combined Silver-layer output, used by every Gold job.
+Shared helper for loading combined Silver-layer output via Spark.
+
+Replaces the old pandas version, which did pd.concat() across every Silver
+month -- fine at 6 months (~20M rows) but blew past available RAM at 40
+months (~140M rows, ~26GB+). Spark reads the whole prefix as one
+distributed DataFrame without materializing it all in driver memory. See
+docs/implementation-plan.md's pandas memory-wall finding (Phase 5).
 """
 
-import pandas as pd
+from pyspark.sql import DataFrame, SparkSession
 
-from spark.common.storage import STORAGE_OPTIONS, LAKE_BUCKET, list_lake
+from spark.common.spark_session import lake_path
 
 
-def load_silver_trips() -> pd.DataFrame:
-    files = list_lake("silver", "trips")
-    if not files:
-        raise FileNotFoundError(f"No Silver trip files found under s3://{LAKE_BUCKET}/silver/trips")
-    return pd.concat(
-        (pd.read_parquet(f"s3://{f}", engine="pyarrow", storage_options=STORAGE_OPTIONS) for f in files),
-        ignore_index=True,
-    )
+def load_silver_trips(spark: SparkSession) -> DataFrame:
+    return spark.read.parquet(lake_path("silver", "trips"))
