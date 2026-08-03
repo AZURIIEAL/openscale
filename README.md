@@ -38,18 +38,18 @@ Everything runs as plain Python (or PySpark) scripts against Dockerized infrastr
 
 | Phase | Status |
 |---|---|
-| 0 – Foundation | ✅ Done |
-| 1 – Exploration & Quality Baseline | ✅ Done |
-| 2 – Silver Layer (full spec) | ✅ Done |
-| 3 – Bronze Layer | ✅ Done (MinIO) |
-| 4 – Gold Layer | ✅ Done (v1, Spark) |
-| 5 – Migrate to PySpark | ✅ Done — Gold, Feature Store, ML training all run on real PySpark |
-| 6 – Infrastructure (Docker) | ✅ MinIO/Postgres/Redis done; ClickHouse deferred |
-| 7 – Streaming (Kafka) | ✅ Done (v1) — consumer still plain Python, not yet ported to Spark Structured Streaming |
-| 8 – Feature Store | ✅ Done (v1) |
-| 9 – ML | ✅ Done (v1, fare prediction only) |
-| 10 – API | ✅ Done (v1) |
-| 11 – Observability | ✅ Done (v1, metrics only — no OpenTelemetry tracing) |
+| 0 – Foundation |  Done |
+| 1 – Exploration & Quality Baseline |  Done |
+| 2 – Silver Layer (full spec) |  Done |
+| 3 – Bronze Layer | Done (MinIO) |
+| 4 – Gold Layer | Done (v1, Spark) |
+| 5 – Migrate to PySpark | Done — Gold, Feature Store, ML training all run on real PySpark |
+| 6 – Infrastructure (Docker) | MinIO/Postgres/Redis done; ClickHouse deferred |
+| 7 – Streaming (Kafka) | Done (v1) — consumer still plain Python, not yet ported to Spark Structured Streaming |
+| 8 – Feature Store | Done (v1) |
+| 9 – ML | Done (v1, fare prediction only) |
+| 10 – API | Done (v1) |
+| 11 – Observability | Done (v1, metrics only — no OpenTelemetry tracing) |
 | 12 – Benchmarking | Not started |
 
 Details, known limitations, and the reasoning behind every "done (v1)" live in [`docs/implementation-plan.md`](docs/implementation-plan.md) — read that before assuming any component is more complete than it is.
