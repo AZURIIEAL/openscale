@@ -2,6 +2,8 @@ import type { ReactNode } from 'react';
 import { Panel } from '@/shared/design-system/Panel';
 import { Toggle } from '@/shared/design-system/Toggle';
 import { useThemeStore } from '@/app/theme-store';
+import { resolveAccentPreset } from '@/app/accent-presets';
+import { ThemeColorPicker } from './ThemeColorPicker';
 
 /**
  * Data-source management isn't built yet (needs the connector abstraction
@@ -9,8 +11,9 @@ import { useThemeStore } from '@/app/theme-store';
  * theme store, already wired end-to-end.
  */
 export function ConnectionsScreen() {
-  const { themeOverride, isFlat, setDark, setFlat } = useThemeStore();
+  const { themeOverride, isFlat, accentId, setDark, setFlat, setAccent } = useThemeStore();
   const isDark = themeOverride === 'dark';
+  const selectedAccentName = resolveAccentPreset(accentId).name;
 
   return (
     <div>
@@ -29,6 +32,16 @@ export function ConnectionsScreen() {
           description="Turns off neomorphic depth — flat, bordered surfaces instead"
           control={<Toggle checked={isFlat} onChange={setFlat} label="Toggle flat mode" />}
         />
+      </Panel>
+
+      <div className="os-font-mono mb-2.5 ml-0.5 mt-6 text-xs font-semibold uppercase tracking-[0.06em]" style={{ color: 'var(--ink-muted)' }}>
+        Theme color
+      </div>
+      <Panel className="max-w-[460px] px-[18px] py-4">
+        <div className="mb-3 text-[11.5px]" style={{ color: 'var(--ink-muted)' }}>
+          Currently <b style={{ color: 'var(--ink)', fontWeight: 600 }}>{selectedAccentName}</b> — applies everywhere the accent color is used (active nav, buttons, focus rings).
+        </div>
+        <ThemeColorPicker accentId={accentId} isDark={isDark} onSelect={setAccent} />
       </Panel>
     </div>
   );

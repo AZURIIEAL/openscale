@@ -1,13 +1,17 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
+import { DEFAULT_ACCENT_ID } from './accent-presets';
 
 type ThemeOverride = 'light' | 'dark';
 
 interface ThemeState {
   themeOverride: ThemeOverride;
   isFlat: boolean;
+  /** Selected AccentPreset id (see accent-presets.ts). */
+  accentId: string;
   setDark: (checked: boolean) => void;
   setFlat: (checked: boolean) => void;
+  setAccent: (id: string) => void;
 }
 
 /**
@@ -26,8 +30,10 @@ export const useThemeStore = create<ThemeState>()(
     (set) => ({
       themeOverride: 'light',
       isFlat: false,
+      accentId: DEFAULT_ACCENT_ID,
       setDark: (checked) => set({ themeOverride: checked ? 'dark' : 'light' }),
       setFlat: (checked) => set({ isFlat: checked }),
+      setAccent: (id) => set({ accentId: id }),
     }),
     {
       name: 'openscale-appearance',

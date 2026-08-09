@@ -35,8 +35,10 @@ export function Sidebar({ servicesUp, servicesTotal, overallStatus, isOpen, onCl
       >
         <div className="flex items-start justify-between">
           <div>
-            <span className="os-font-display text-[22px] uppercase tracking-wide">OpenScale</span>
-            <div className="os-font-mono mt-[-2px] pl-1.5 text-[10px] uppercase tracking-[0.08em]" style={{ color: 'var(--ink-faint)' }}>
+            <span className="os-font-display text-[22px] uppercase tracking-wide">
+              Open<span style={{ color: 'var(--accent)' }}>Scale</span>
+            </span>
+            <div className="os-font-mono mt-[-2px] text-[10px] uppercase tracking-[0.08em]" style={{ color: 'var(--ink-faint)' }}>
               Control Console
             </div>
           </div>
