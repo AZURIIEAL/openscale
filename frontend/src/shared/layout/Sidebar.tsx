@@ -90,7 +90,7 @@ function NavItemLink({ entry, onNavigate }: { entry: NavEntry; onNavigate: () =>
         <>
           <span
             className="h-1.5 w-1.5 flex-shrink-0 rounded-full"
-            style={{ background: isActive ? 'var(--accent)' : 'var(--ink-faint)', boxShadow: isActive ? '0 0 6px var(--accent)' : undefined }}
+            style={{ background: isActive ? 'var(--accent)' : 'var(--ink-faint)' }}
           />
           {entry.label}
         </>
