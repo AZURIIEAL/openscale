@@ -4,6 +4,8 @@ import { Toggle } from '@/shared/design-system/Toggle';
 import { useThemeStore } from '@/app/theme-store';
 import { resolveAccentPreset } from '@/app/accent-presets';
 import { ThemeColorPicker } from './ThemeColorPicker';
+import { ShadowDepthSlider } from './ShadowDepthSlider';
+import { FontSizeStepper } from './FontSizeStepper';
 
 /**
  * Data-source management isn't built yet (needs the connector abstraction
@@ -11,7 +13,8 @@ import { ThemeColorPicker } from './ThemeColorPicker';
  * theme store, already wired end-to-end.
  */
 export function ConnectionsScreen() {
-  const { themeOverride, isFlat, accentId, setDark, setFlat, setAccent } = useThemeStore();
+  const { themeOverride, isFlat, accentId, shadowScale, uiScale, setDark, setFlat, setAccent, setShadowScale, setUiScale } =
+    useThemeStore();
   const isDark = themeOverride === 'dark';
   const selectedAccentName = resolveAccentPreset(accentId).name;
 
@@ -31,6 +34,18 @@ export function ConnectionsScreen() {
           title="Flat mode"
           description="Turns off neomorphic depth — flat, bordered surfaces instead"
           control={<Toggle checked={isFlat} onChange={setFlat} label="Toggle flat mode" />}
+        />
+        <SettingRow
+          borderTop
+          title="Shadow depth"
+          description={isFlat ? 'No effect while flat mode is on' : 'How pronounced the neomorphic shadows are'}
+          control={<ShadowDepthSlider value={shadowScale} onChange={setShadowScale} />}
+        />
+        <SettingRow
+          borderTop
+          title="Font size"
+          description="Scales all text and UI elements"
+          control={<FontSizeStepper value={uiScale} onChange={setUiScale} />}
         />
       </Panel>
 

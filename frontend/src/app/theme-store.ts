@@ -9,9 +9,15 @@ interface ThemeState {
   isFlat: boolean;
   /** Selected AccentPreset id (see accent-presets.ts). */
   accentId: string;
+  /** Multiplies every neomorphic box-shadow's offset/blur (primitives.css). 1 = default. */
+  shadowScale: number;
+  /** Zoom factor applied to #root (index.css) -- the app-wide "font size" control. 1 = 100%. */
+  uiScale: number;
   setDark: (checked: boolean) => void;
   setFlat: (checked: boolean) => void;
   setAccent: (id: string) => void;
+  setShadowScale: (value: number) => void;
+  setUiScale: (value: number) => void;
 }
 
 /**
@@ -31,9 +37,13 @@ export const useThemeStore = create<ThemeState>()(
       themeOverride: 'light',
       isFlat: false,
       accentId: DEFAULT_ACCENT_ID,
+      shadowScale: 1,
+      uiScale: 1,
       setDark: (checked) => set({ themeOverride: checked ? 'dark' : 'light' }),
       setFlat: (checked) => set({ isFlat: checked }),
       setAccent: (id) => set({ accentId: id }),
+      setShadowScale: (value) => set({ shadowScale: value }),
+      setUiScale: (value) => set({ uiScale: value }),
     }),
     {
       name: 'openscale-appearance',

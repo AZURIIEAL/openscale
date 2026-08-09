@@ -20,4 +20,8 @@ body {
 
 #root {
   min-height: 100vh;
+  /* Font-size control (Connections screen). zoom scales every px value
+     app-wide -- including the many hardcoded text-[Npx] sizes -- which a
+     root font-size trick alone wouldn't reach, since those aren't rem. */
+  zoom: var(--ui-scale, 1);
 }

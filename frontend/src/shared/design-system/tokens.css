@@ -21,6 +21,14 @@
   --shadow-hi-soft: rgba(255, 255, 255, 0.6);
   --hairline: rgba(38, 43, 51, 0.08);
   color-scheme: light;
+
+  /* Depth/scale controls (Connections screen) -- unitless multipliers, not
+     color-dependent, so declared once here rather than duplicated across
+     the light/dark blocks below. --shadow-scale multiplies every box-shadow
+     offset/blur in primitives.css; --ui-scale drives #root's zoom in
+     index.css. */
+  --shadow-scale: 1;
+  --ui-scale: 1;
 }
 
 /* No @media (prefers-color-scheme: dark) fallback here on purpose -- the

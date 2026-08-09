@@ -20,22 +20,22 @@
   background: var(--bg);
   border-radius: 18px;
   box-shadow:
-    8px 8px 16px var(--shadow-lo),
-    -8px -8px 16px var(--shadow-hi);
+    calc(8px * var(--shadow-scale)) calc(8px * var(--shadow-scale)) calc(16px * var(--shadow-scale)) var(--shadow-lo),
+    calc(-8px * var(--shadow-scale)) calc(-8px * var(--shadow-scale)) calc(16px * var(--shadow-scale)) var(--shadow-hi);
 }
 .os-panel-sm {
   background: var(--bg);
   border-radius: 14px;
   box-shadow:
-    6px 6px 12px var(--shadow-lo-soft),
-    -6px -6px 12px var(--shadow-hi-soft);
+    calc(6px * var(--shadow-scale)) calc(6px * var(--shadow-scale)) calc(12px * var(--shadow-scale)) var(--shadow-lo-soft),
+    calc(-6px * var(--shadow-scale)) calc(-6px * var(--shadow-scale)) calc(12px * var(--shadow-scale)) var(--shadow-hi-soft);
 }
 .os-well {
   background: var(--bg);
   border-radius: 12px;
   box-shadow:
-    inset 4px 4px 9px var(--shadow-lo),
-    inset -4px -4px 9px var(--shadow-hi);
+    inset calc(4px * var(--shadow-scale)) calc(4px * var(--shadow-scale)) calc(9px * var(--shadow-scale)) var(--shadow-lo),
+    inset calc(-4px * var(--shadow-scale)) calc(-4px * var(--shadow-scale)) calc(9px * var(--shadow-scale)) var(--shadow-hi);
 }
 .os-hairline {
   border: 1px solid var(--hairline);
@@ -45,22 +45,22 @@
    selected-state treatment so they read consistently across domains. */
 .os-selectable[aria-selected='true'] {
   box-shadow:
-    inset 3px 3px 7px var(--shadow-lo),
-    inset -3px -3px 7px var(--shadow-hi);
+    inset calc(3px * var(--shadow-scale)) calc(3px * var(--shadow-scale)) calc(7px * var(--shadow-scale)) var(--shadow-lo),
+    inset calc(-3px * var(--shadow-scale)) calc(-3px * var(--shadow-scale)) calc(7px * var(--shadow-scale)) var(--shadow-hi);
 }
 
 .os-nav-item[aria-current='page'] {
   color: var(--accent);
   box-shadow:
-    inset 3px 3px 7px var(--shadow-lo),
-    inset -3px -3px 7px var(--shadow-hi);
+    inset calc(3px * var(--shadow-scale)) calc(3px * var(--shadow-scale)) calc(7px * var(--shadow-scale)) var(--shadow-lo),
+    inset calc(-3px * var(--shadow-scale)) calc(-3px * var(--shadow-scale)) calc(7px * var(--shadow-scale)) var(--shadow-hi);
 }
 
 .os-lineage-node.active {
   color: var(--accent);
   box-shadow:
-    inset 2px 2px 5px var(--shadow-lo),
-    inset -2px -2px 5px var(--shadow-hi);
+    inset calc(2px * var(--shadow-scale)) calc(2px * var(--shadow-scale)) calc(5px * var(--shadow-scale)) var(--shadow-lo),
+    inset calc(-2px * var(--shadow-scale)) calc(-2px * var(--shadow-scale)) calc(5px * var(--shadow-scale)) var(--shadow-hi);
 }
 
 /* Status LED -- semantic glow, deliberately NOT part of the neomorphic
@@ -124,8 +124,8 @@
   color: var(--ink-muted);
   font-size: 13px;
   box-shadow:
-    3px 3px 7px var(--shadow-lo-soft),
-    -3px -3px 7px var(--shadow-hi-soft);
+    calc(3px * var(--shadow-scale)) calc(3px * var(--shadow-scale)) calc(7px * var(--shadow-scale)) var(--shadow-lo-soft),
+    calc(-3px * var(--shadow-scale)) calc(-3px * var(--shadow-scale)) calc(7px * var(--shadow-scale)) var(--shadow-hi-soft);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -163,8 +163,8 @@
   background: var(--accent);
   color: var(--accent-ink);
   box-shadow:
-    4px 4px 10px var(--shadow-lo),
-    -2px -2px 6px var(--shadow-hi-soft);
+    calc(4px * var(--shadow-scale)) calc(4px * var(--shadow-scale)) calc(10px * var(--shadow-scale)) var(--shadow-lo),
+    calc(-2px * var(--shadow-scale)) calc(-2px * var(--shadow-scale)) calc(6px * var(--shadow-scale)) var(--shadow-hi-soft);
   transition: transform 0.1s ease;
 }
 .os-run-btn:active {
@@ -189,8 +189,8 @@
   position: relative;
   flex-shrink: 0;
   box-shadow:
-    inset 3px 3px 6px var(--shadow-lo),
-    inset -3px -3px 6px var(--shadow-hi);
+    inset calc(3px * var(--shadow-scale)) calc(3px * var(--shadow-scale)) calc(6px * var(--shadow-scale)) var(--shadow-lo),
+    inset calc(-3px * var(--shadow-scale)) calc(-3px * var(--shadow-scale)) calc(6px * var(--shadow-scale)) var(--shadow-hi);
 }
 .os-toggle-knob {
   position: absolute;
@@ -201,8 +201,8 @@
   border-radius: 50%;
   background: var(--bg);
   box-shadow:
-    2px 2px 5px var(--shadow-lo),
-    -2px -2px 5px var(--shadow-hi);
+    calc(2px * var(--shadow-scale)) calc(2px * var(--shadow-scale)) calc(5px * var(--shadow-scale)) var(--shadow-lo),
+    calc(-2px * var(--shadow-scale)) calc(-2px * var(--shadow-scale)) calc(5px * var(--shadow-scale)) var(--shadow-hi);
   transition:
     left 0.16s ease,
     background 0.16s ease;

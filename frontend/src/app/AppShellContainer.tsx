@@ -11,14 +11,15 @@ import { useSystemHealthSummary } from '@/domains/system-health/application/useS
  * container/presentational split -- all the wiring lives here so AppShell
  * itself stays a pure layout component.
  *
- * Note: flat-mode's and accent-color's *pickers* live on the Connections
- * screen, not here -- that screen calls useThemeStore() independently to
- * get setFlat/setAccent. This container only reads the resulting state, to
- * sync it onto <html> as an attribute (data-flat) or CSS variable (--accent)
- * for tokens.css/primitives.css to pick up.
+ * Note: flat-mode's, accent-color's, shadow-depth's, and font-size's
+ * *pickers* all live on the Connections screen, not here -- that screen
+ * calls useThemeStore() independently to get their setters. This container
+ * only reads the resulting state, to sync it onto <html> as an attribute
+ * (data-flat) or CSS variable (--accent, --shadow-scale, --ui-scale) for
+ * tokens.css/primitives.css/index.css to pick up.
  */
 export function AppShellContainer() {
-  const { themeOverride, isFlat, accentId, setDark } = useThemeStore();
+  const { themeOverride, isFlat, accentId, shadowScale, uiScale, setDark } = useThemeStore();
   const isDark = themeOverride === 'dark';
 
   const { data: health } = useSystemHealthSummary();
@@ -39,6 +40,14 @@ export function AppShellContainer() {
     // every other token (backgrounds, shadows, ink) alone.
     document.documentElement.style.setProperty('--accent', isDark ? preset.dark : preset.light);
   }, [accentId, isDark]);
+
+  useEffect(() => {
+    document.documentElement.style.setProperty('--shadow-scale', String(shadowScale));
+  }, [shadowScale]);
+
+  useEffect(() => {
+    document.documentElement.style.setProperty('--ui-scale', String(uiScale));
+  }, [uiScale]);
 
   return (
     <AppShell
