@@ -1,0 +1,43 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+
+# Virtual environment
+venv/
+.venv/
+
+# Environment / secrets
+.env
+.env.*
+
+# Raw/Bronze/Silver/Gold data -- regenerable via ingestion/downloader from TLC
+# and the Bronze->Silver->Gold pipeline; too large for git (data/raw/ alone is
+# multiple GB once more than a couple months are downloaded). Data actually
+# lives in the MinIO container volume (Bronze/Silver/Gold), not in this repo.
+data/raw/
+data/bronze/
+data/silver/
+data/gold/
+
+# MLflow local tracking store + logged model artifacts -- regenerable via
+# ml/training/train_fare_model.py
+ml/mlflow/
+
+# Spark Structured Streaming checkpoint state -- local, rebuilt on every run
+streaming/spark-streaming/.checkpoints/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editors
+.vscode/
+.idea/
+
+# Logs
+*.log

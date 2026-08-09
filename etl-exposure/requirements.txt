@@ -1,0 +1,14 @@
+pandas
+pyarrow
+s3fs
+requests
+kafka-python
+psycopg2-binary
+redis
+scikit-learn
+mlflow
+fastapi
+uvicorn
+prometheus-fastapi-instrumentator
+pyspark
+psutil

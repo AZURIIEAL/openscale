@@ -1,0 +1,102 @@
+/*
+ * Canonical design tokens for the OpenScale neomorphic/skeuomorphic UI.
+ * Source of truth: ideas/tech-stack.md "Visual design system — decided".
+ * Do not fork these values into component files -- everything below reads
+ * from these custom properties so the whole app re-themes from one place.
+ */
+
+:root {
+  --bg: #e3e7ec;
+  --ink: #262b33;
+  --ink-muted: #6b7480;
+  --ink-faint: #9aa3ae;
+  --accent: #3e6e6b;
+  --accent-ink: #f2f7f6;
+  --good: #3f8a4d;
+  --warn: #b8811f;
+  --crit: #b23c31;
+  --shadow-lo: rgba(163, 177, 198, 0.55);
+  --shadow-hi: rgba(255, 255, 255, 0.85);
+  --shadow-lo-soft: rgba(163, 177, 198, 0.35);
+  --shadow-hi-soft: rgba(255, 255, 255, 0.6);
+  --hairline: rgba(38, 43, 51, 0.08);
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #22262c;
+    --ink: #e8eaed;
+    --ink-muted: #9aa2ab;
+    --ink-faint: #6c7480;
+    --accent: #6fb0ab;
+    --accent-ink: #10201f;
+    --good: #5cb96a;
+    --warn: #e0ac4c;
+    --crit: #e2685b;
+    --shadow-lo: rgba(0, 0, 0, 0.55);
+    --shadow-hi: rgba(255, 255, 255, 0.045);
+    --shadow-lo-soft: rgba(0, 0, 0, 0.4);
+    --shadow-hi-soft: rgba(255, 255, 255, 0.03);
+    --hairline: rgba(255, 255, 255, 0.07);
+    color-scheme: dark;
+  }
+}
+:root[data-theme='dark'] {
+  --bg: #22262c;
+  --ink: #e8eaed;
+  --ink-muted: #9aa2ab;
+  --ink-faint: #6c7480;
+  --accent: #6fb0ab;
+  --accent-ink: #10201f;
+  --good: #5cb96a;
+  --warn: #e0ac4c;
+  --crit: #e2685b;
+  --shadow-lo: rgba(0, 0, 0, 0.55);
+  --shadow-hi: rgba(255, 255, 255, 0.045);
+  --shadow-lo-soft: rgba(0, 0, 0, 0.4);
+  --shadow-hi-soft: rgba(255, 255, 255, 0.03);
+  --hairline: rgba(255, 255, 255, 0.07);
+  color-scheme: dark;
+}
+:root[data-theme='light'] {
+  --bg: #e3e7ec;
+  --ink: #262b33;
+  --ink-muted: #6b7480;
+  --ink-faint: #9aa3ae;
+  --accent: #3e6e6b;
+  --accent-ink: #f2f7f6;
+  --good: #3f8a4d;
+  --warn: #b8811f;
+  --crit: #b23c31;
+  --shadow-lo: rgba(163, 177, 198, 0.55);
+  --shadow-hi: rgba(255, 255, 255, 0.85);
+  --shadow-lo-soft: rgba(163, 177, 198, 0.35);
+  --shadow-hi-soft: rgba(255, 255, 255, 0.6);
+  --hairline: rgba(38, 43, 51, 0.08);
+  color-scheme: light;
+}
+
+/* ---------- flat-mode override (see FlatModeToggle) ----------
+   Overrides box-shadow directly rather than nulling --shadow-lo/--shadow-hi,
+   since those tokens double as plain colors elsewhere (e.g. gauge track
+   strokes) -- zeroing the token itself would make those invisible too. */
+:root[data-flat='true'] .os-panel,
+:root[data-flat='true'] .os-panel-sm,
+:root[data-flat='true'] .os-well,
+:root[data-flat='true'] .os-icon-btn,
+:root[data-flat='true'] .os-toggle,
+:root[data-flat='true'] .os-run-btn {
+  box-shadow: none !important;
+  border: 1px solid var(--hairline);
+}
+:root[data-flat='true'] .os-toggle .os-toggle-knob {
+  box-shadow: none !important;
+  border: 1px solid var(--hairline);
+}
+:root[data-flat='true'] .os-nav-item[aria-current='page'],
+:root[data-flat='true'] .os-selectable[aria-selected='true'],
+:root[data-flat='true'] .os-lineage-node.active {
+  box-shadow: none !important;
+  background: var(--hairline);
+}

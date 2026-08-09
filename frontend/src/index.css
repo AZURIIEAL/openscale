@@ -1,0 +1,23 @@
+@import 'tailwindcss';
+@import './shared/design-system/fonts.css';
+@import './shared/design-system/tokens.css';
+@import './shared/design-system/primitives.css';
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: 'Plex Sans', -apple-system, sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+}
+
+#root {
+  min-height: 100vh;
+}
