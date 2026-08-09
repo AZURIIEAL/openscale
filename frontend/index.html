@@ -4,6 +4,22 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>OpenScale — Control Console</title>
+    <script>
+      // Applies a persisted theme choice before first paint, so a refresh
+      // after picking dark mode doesn't flash light first. Reads the same
+      // sessionStorage key Zustand's persist middleware writes
+      // (see src/app/theme-store.ts) -- kept in sync manually since this
+      // has to run before any app code loads.
+      (function () {
+        try {
+          var raw = sessionStorage.getItem('openscale-appearance');
+          var theme = raw ? JSON.parse(raw).state.themeOverride : 'light';
+          document.documentElement.setAttribute('data-theme', theme === 'dark' ? 'dark' : 'light');
+        } catch (e) {
+          document.documentElement.setAttribute('data-theme', 'light');
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

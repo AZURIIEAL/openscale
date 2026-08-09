@@ -1,5 +1,6 @@
 import { ServiceHealthCard } from './ServiceHealthCard';
 import { useSystemHealthSummary } from '../application/useSystemHealthSummary';
+import { sortServicesForDisplay } from '../domain/rules';
 
 /**
  * Reusable across domains -- Home renders this to open with "is everything
@@ -14,8 +15,8 @@ export function HealthStrip() {
   }
 
   return (
-    <div className="mb-5 grid grid-cols-6 gap-3">
-      {data.services.map((service) => (
+    <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+      {sortServicesForDisplay(data.services).map((service) => (
         <ServiceHealthCard key={service.id} service={service} />
       ))}
     </div>

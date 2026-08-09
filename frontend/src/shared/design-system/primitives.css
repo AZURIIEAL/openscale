@@ -6,7 +6,15 @@
  *
  * Naming: `os-` prefix keeps these distinct from Tailwind utilities and from
  * one-off domain-specific styles, which stay local to their own ui/ folder.
+ *
+ * Wrapped in @layer components: Tailwind v4 puts its own utilities (hover:,
+ * lg:hidden, etc.) in @layer utilities, and unlayered CSS always beats
+ * layered CSS regardless of source order or specificity. Without this
+ * wrapper, a plain class here like .os-icon-btn's `display: flex` would
+ * silently win over a utility like `lg:hidden` every time.
  */
+
+@layer components {
 
 .os-panel {
   background: var(--bg);
@@ -133,6 +141,13 @@
 .os-icon-btn-crit {
   color: var(--crit);
 }
+.os-icon-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.os-icon-btn:disabled:active {
+  transform: none;
+}
 
 .os-run-btn {
   display: inline-flex;
@@ -220,3 +235,5 @@
 .os-tabular-nums {
   font-variant-numeric: tabular-nums;
 }
+
+} /* @layer components */

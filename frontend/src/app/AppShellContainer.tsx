@@ -1,26 +1,14 @@
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { AppShell } from '@/shared/layout/AppShell';
 import { useThemeStore } from './theme-store';
 import { useSystemHealthSummary } from '@/domains/system-health/application/useSystemHealthSummary';
 
-function usePrefersDark(): boolean {
-  const [prefersDark, setPrefersDark] = useState(
-    () => window.matchMedia('(prefers-color-scheme: dark)').matches,
-  );
-  useEffect(() => {
-    const mql = window.matchMedia('(prefers-color-scheme: dark)');
-    const listener = (e: MediaQueryListEvent) => setPrefersDark(e.matches);
-    mql.addEventListener('change', listener);
-    return () => mql.removeEventListener('change', listener);
-  }, []);
-  return prefersDark;
-}
-
 /**
  * Connects the presentational AppShell to its two data sources: appearance
- * (Zustand, UI-local) and system health (TanStack Query, server state).
- * This is the container half of the container/presentational split -- all
- * the wiring lives here so AppShell itself stays a pure layout component.
+ * (Zustand, UI-local, persisted to sessionStorage) and system health
+ * (TanStack Query, server state). This is the container half of the
+ * container/presentational split -- all the wiring lives here so AppShell
+ * itself stays a pure layout component.
  *
  * Note: flat-mode's *toggle* lives on the Connections screen, not here --
  * that screen calls useThemeStore() independently to get setFlat. This
@@ -29,8 +17,7 @@ function usePrefersDark(): boolean {
  */
 export function AppShellContainer() {
   const { themeOverride, isFlat, setDark } = useThemeStore();
-  const prefersDark = usePrefersDark();
-  const isDark = themeOverride ? themeOverride === 'dark' : prefersDark;
+  const isDark = themeOverride === 'dark';
 
   const { data: health } = useSystemHealthSummary();
 

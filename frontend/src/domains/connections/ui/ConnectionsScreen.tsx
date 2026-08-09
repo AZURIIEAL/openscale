@@ -10,8 +10,7 @@ import { useThemeStore } from '@/app/theme-store';
  */
 export function ConnectionsScreen() {
   const { themeOverride, isFlat, setDark, setFlat } = useThemeStore();
-  const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-  const isDark = themeOverride ? themeOverride === 'dark' : prefersDark;
+  const isDark = themeOverride === 'dark';
 
   return (
     <div>

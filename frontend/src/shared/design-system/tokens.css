@@ -23,25 +23,10 @@
   color-scheme: light;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #22262c;
-    --ink: #e8eaed;
-    --ink-muted: #9aa2ab;
-    --ink-faint: #6c7480;
-    --accent: #6fb0ab;
-    --accent-ink: #10201f;
-    --good: #5cb96a;
-    --warn: #e0ac4c;
-    --crit: #e2685b;
-    --shadow-lo: rgba(0, 0, 0, 0.55);
-    --shadow-hi: rgba(255, 255, 255, 0.045);
-    --shadow-lo-soft: rgba(0, 0, 0, 0.4);
-    --shadow-hi-soft: rgba(255, 255, 255, 0.03);
-    --hairline: rgba(255, 255, 255, 0.07);
-    color-scheme: dark;
-  }
-}
+/* No @media (prefers-color-scheme: dark) fallback here on purpose -- the
+   app defaults to light regardless of OS preference (see theme-store.ts).
+   Dark only applies once JS sets data-theme='dark', either from an explicit
+   toggle or a persisted choice restored from sessionStorage. */
 :root[data-theme='dark'] {
   --bg: #22262c;
   --ink: #e8eaed;

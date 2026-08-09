@@ -1,0 +1,9 @@
+global:
+  scrape_interval: 5s
+
+scrape_configs:
+  - job_name: openscale-api
+    static_configs:
+      # The FastAPI app runs on the host (uvicorn), not in a container --
+      # host.docker.internal resolves back to the host from inside Docker.
+      - targets: ["host.docker.internal:8000"]

@@ -10,14 +10,14 @@ interface GaugeRowProps {
 
 export function GaugeRow({ gauges, revenueTrend }: GaugeRowProps) {
   return (
-    <div className="mb-4 grid grid-cols-[1.1fr_1.1fr_1.6fr] items-stretch gap-4">
+    <div className="mb-4 grid grid-cols-1 items-stretch gap-4 sm:grid-cols-2 lg:grid-cols-[1.1fr_1.1fr_1.6fr]">
       {gauges.map((gauge) => (
         <Panel key={gauge.id} className="flex flex-col items-center gap-2.5 p-[18px]">
           <Gauge value={gauge.valuePercent} label={gauge.label} sublabel={gauge.sublabel} color={gauge.color} />
         </Panel>
       ))}
 
-      <Panel className="flex flex-col gap-2.5 px-5 py-[18px]">
+      <Panel className="flex flex-col gap-2.5 px-5 py-[18px] sm:col-span-2 lg:col-span-1">
         <div className="flex items-baseline justify-between">
           <span className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--ink-muted)' }}>
             Daily Revenue — last 14 days

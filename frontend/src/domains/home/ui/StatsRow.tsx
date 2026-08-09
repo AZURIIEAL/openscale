@@ -3,7 +3,7 @@ import type { HomeStat } from '../domain/entities';
 
 export function StatsRow({ stats }: { stats: HomeStat[] }) {
   return (
-    <div className="mb-4 grid grid-cols-4 gap-3.5">
+    <div className="mb-4 grid grid-cols-2 gap-3.5 lg:grid-cols-4">
       {stats.map((stat) => (
         <Panel key={stat.id} size="sm" className="px-[18px] py-4">
           <div className="os-font-display os-tabular-nums text-[25px]">{stat.value}</div>

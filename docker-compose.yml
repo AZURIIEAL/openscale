@@ -1,8 +1,4 @@
-# SUPERSEDED: this stack now runs from the root docker-compose.yml
-# (project "openscale"), which also owns control-plane and points at the
-# same openscale_* volumes. Do not run this file alongside the root one --
-# both define containers named openscale-minio/-kafka/-postgres/etc. and
-# will conflict. Kept here for reference only.
+name: openscale
 
 services:
   minio:
@@ -79,7 +75,7 @@ services:
     image: redis:7-alpine
     container_name: openscale-redis
     ports:
-      - "6379:6379" # online feature store
+      - "6379:6379" # online feature store + job queue (Redis Streams)
     volumes:
       - redis-data:/data
 
@@ -112,8 +108,32 @@ services:
     depends_on:
       - prometheus
 
+  control-plane:
+    build:
+      context: ./control-plane
+    container_name: openscale-control-plane
+    ports:
+      - "8080:8080" # HTTP API, called by the frontend at VITE_API_BASE_URL
+    environment:
+      PORT: "8080"
+      FRONTEND_ORIGIN: "http://localhost:5173"
+    volumes:
+      # Grants access to the host's Docker daemon so internal/docker can
+      # inspect sibling containers (openscale-minio, openscale-kafka, ...)
+      # for /api/system-health. Read-only: this service only inspects,
+      # never starts/stops containers today.
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    restart: unless-stopped
+
 volumes:
+  # Explicit names, matching the volumes already populated by the original
+  # (pre-restructure) "openscale" compose project -- pins these services to
+  # that existing data instead of creating fresh empty ones.
   minio-data:
+    name: openscale_minio-data
   postgres-data:
+    name: openscale_postgres-data
   redis-data:
+    name: openscale_redis-data
   grafana-data:
+    name: openscale_grafana-data

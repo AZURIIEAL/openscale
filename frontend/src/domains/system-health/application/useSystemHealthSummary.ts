@@ -1,12 +1,12 @@
 import { useQuery } from '@tanstack/react-query';
-import { mockSystemHealthGateway } from '../infrastructure/mockSystemHealthGateway';
+import { httpSystemHealthGateway } from '../infrastructure/httpSystemHealthGateway';
 
 /**
- * The one place a gateway implementation gets selected. When the real
- * control-plane exists, this becomes the only line that changes:
- *   const gateway = new HttpSystemHealthGateway(apiClient);
+ * The one place a gateway implementation gets selected. Now pointed at the
+ * real control-plane; swap back to mockSystemHealthGateway here if the
+ * control-plane isn't running locally.
  */
-const gateway = mockSystemHealthGateway;
+const gateway = httpSystemHealthGateway;
 
 export function useSystemHealthSummary() {
   return useQuery({
