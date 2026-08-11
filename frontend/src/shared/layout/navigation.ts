@@ -16,6 +16,7 @@ export const NAV_ENTRIES: NavEntry[] = [
   { path: '/pipelines', label: 'Pipelines' },
   { path: '/sql-editor', label: 'SQL Editor' },
   { path: '/data-catalog', label: 'Data Catalog' },
+  { path: '/notebooks', label: 'Notebooks' },
   { path: '/ml-workbench', label: 'ML Workbench' },
   { path: '/streaming', label: 'Streaming' },
   { path: '/dashboards', label: 'Dashboards' },

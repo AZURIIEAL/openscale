@@ -14,8 +14,9 @@ import (
 // on and controls. Names match the container_name fields in the root
 // docker-compose.yml (project "openscale").
 // Console URLs point at each service's own web UI, where one exists. Kafka,
-// Postgres, and Redis are protocol-only in this stack -- no UI is
-// provisioned for them, so they're left non-clickable in the frontend.
+// Postgres, Redis, and the worker are protocol-only/headless in this stack
+// -- no UI is provisioned for them, so they're left non-clickable in the
+// frontend.
 var watchedServices = []docker.WatchedService{
 	{ID: "minio", Name: "MinIO", ContainerName: "openscale-minio", Label: "lake@9000", ConsoleURL: "http://localhost:9101"},
 	{ID: "kafka", Name: "Kafka", ContainerName: "openscale-kafka", Label: "9092"},
@@ -23,6 +24,8 @@ var watchedServices = []docker.WatchedService{
 	{ID: "redis", Name: "Redis", ContainerName: "openscale-redis", Label: "6379"},
 	{ID: "prometheus", Name: "Prometheus", ContainerName: "openscale-prometheus", Label: ":9090", ConsoleURL: "http://localhost:9090"},
 	{ID: "grafana", Name: "Grafana", ContainerName: "openscale-grafana", Label: ":3000", ConsoleURL: "http://localhost:3000"},
+	{ID: "worker", Name: "Worker", ContainerName: "openscale-worker", Label: "job queue"},
+	{ID: "jupyter", Name: "Jupyter", ContainerName: "openscale-jupyter", Label: ":8888", ConsoleURL: "http://localhost:8888/lab?token=openscale-dev"},
 }
 
 // findWatchedService looks up a watched service by its API-facing ID (e.g.

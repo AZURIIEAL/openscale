@@ -1,6 +1,7 @@
 export { Panel } from './Panel';
 export { Well } from './Well';
 export { Led } from './Led';
+export { Spinner } from './Spinner';
 export { StatusPill } from './StatusPill';
 export { Toggle } from './Toggle';
 export { IconButton } from './IconButton';

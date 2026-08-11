@@ -1,0 +1,6 @@
+# Downloaded raw parquet -- regenerable via the ingest job, too large for
+# git. Mirrors etl-exposure/.gitignore's same data/raw/ exclusion.
+data/
+
+__pycache__/
+*.py[cod]

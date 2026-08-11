@@ -9,11 +9,20 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
 
+	"github.com/AZURIIEAL/openscale/control-plane/internal/db"
 	"github.com/AZURIIEAL/openscale/control-plane/internal/docker"
+	"github.com/AZURIIEAL/openscale/control-plane/internal/redis"
+	"github.com/AZURIIEAL/openscale/control-plane/internal/ws"
 )
 
 // NewRouter builds the full HTTP route tree for the control-plane.
-func NewRouter(watcher *docker.Watcher, frontendOrigin string) http.Handler {
+func NewRouter(
+	watcher *docker.Watcher,
+	database *db.DB,
+	redisClient *redis.Client,
+	wsHandler *ws.Handler,
+	frontendOrigin string,
+) http.Handler {
 	r := chi.NewRouter()
 
 	r.Use(middleware.RequestID)
@@ -34,11 +43,17 @@ func NewRouter(watcher *docker.Watcher, frontendOrigin string) http.Handler {
 
 	healthHandler := NewHealthHandler(watcher)
 	actionHandler := NewContainerActionHandler(watcher)
+	jobsHandler := NewJobsHandler(database, redisClient)
 	r.Route("/api", func(r chi.Router) {
 		r.Get("/system-health", healthHandler.ServeHTTP)
 		r.Post("/services/{id}/start", actionHandler.Start)
 		r.Post("/services/{id}/stop", actionHandler.Stop)
 		r.Post("/services/{id}/restart", actionHandler.Restart)
+
+		r.Post("/jobs/{type}/run", jobsHandler.Run)
+		r.Get("/jobs/runs", jobsHandler.ListRuns)
+
+		r.Get("/ws/jobs/{id}", wsHandler.HandleJobWS)
 	})
 
 	return r

@@ -117,12 +117,52 @@ services:
     environment:
       PORT: "8080"
       FRONTEND_ORIGIN: "http://localhost:5173"
+      POSTGRES_DSN: "postgres://openscale:openscale@postgres:5432/openscale?sslmode=disable"
+      REDIS_ADDR: "redis:6379"
     volumes:
       # Grants access to the host's Docker daemon so internal/docker can
       # inspect sibling containers (openscale-minio, openscale-kafka, ...)
       # for /api/system-health. Read-only: this service only inspects,
       # never starts/stops containers today.
       - /var/run/docker.sock:/var/run/docker.sock:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+  worker:
+    build:
+      context: ./worker
+    container_name: openscale-worker
+    environment:
+      REDIS_ADDR: "redis:6379"
+      POSTGRES_DSN: "postgresql://openscale:openscale@postgres:5432/openscale"
+      MINIO_ENDPOINT: "http://minio:9000"
+    volumes:
+      # rw: downloaded raw parquet lands here, persists across rebuilds and
+      # is visible on the host for inspection.
+      - ./worker/data:/app/data
+    depends_on:
+      redis:
+        condition: service_started
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    restart: unless-stopped
+
+  jupyter:
+    build:
+      context: ./jupyter
+    container_name: openscale-jupyter
+    ports:
+      - "8888:8888"
+    environment:
+      JUPYTER_TOKEN: "openscale-dev"
+    volumes:
+      # rw: notebook 03 writes real output files.
+      - ./notebooks:/home/jovyan/notebooks
+    command: start-notebook.py --ServerApp.root_dir=/home/jovyan/notebooks
     restart: unless-stopped
 
 volumes:

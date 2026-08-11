@@ -1,0 +1,7 @@
+pandas==2.3.3
+pyarrow
+fsspec
+s3fs
+requests
+redis
+psycopg2-binary

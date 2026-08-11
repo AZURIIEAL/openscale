@@ -4,6 +4,7 @@
 package main
 
 import (
+	"context"
 	"log"
 	"net/http"
 	"os"
@@ -15,7 +16,10 @@ import (
 
 	"github.com/AZURIIEAL/openscale/control-plane/internal/api"
 	"github.com/AZURIIEAL/openscale/control-plane/internal/config"
+	"github.com/AZURIIEAL/openscale/control-plane/internal/db"
 	"github.com/AZURIIEAL/openscale/control-plane/internal/docker"
+	"github.com/AZURIIEAL/openscale/control-plane/internal/redis"
+	"github.com/AZURIIEAL/openscale/control-plane/internal/ws"
 )
 
 func main() {
@@ -27,13 +31,39 @@ func main() {
 		log.Fatalf("config: %v", err)
 	}
 
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
 	watcher, err := docker.NewWatcher(cfg.DockerHost)
 	if err != nil {
 		logger.Fatal().Err(err).Msg("failed to connect to Docker daemon")
 	}
 	defer watcher.Close()
 
-	router := api.NewRouter(watcher, cfg.FrontendOrigin)
+	pool, err := db.NewPool(ctx, cfg.PostgresDSN)
+	if err != nil {
+		logger.Fatal().Err(err).Msg("failed to connect to Postgres")
+	}
+	defer pool.Close()
+
+	if err := db.Migrate(ctx, pool); err != nil {
+		logger.Fatal().Err(err).Msg("failed to apply migrations")
+	}
+	database := db.New(pool)
+
+	redisClient := redis.NewClient(cfg.RedisAddr)
+	defer redisClient.Close()
+
+	jobEvents, err := redisClient.SubscribeJobEvents(ctx)
+	if err != nil {
+		logger.Fatal().Err(err).Msg("failed to subscribe to job events")
+	}
+	hub := ws.NewHub()
+	go hub.Run(jobEvents)
+
+	wsHandler := ws.NewHandler(hub, database, cfg.FrontendOrigin)
+
+	router := api.NewRouter(watcher, database, redisClient, wsHandler, cfg.FrontendOrigin)
 
 	srv := &http.Server{
 		Addr:              ":" + cfg.Port,
@@ -53,4 +83,9 @@ func main() {
 	<-stop
 
 	logger.Info().Msg("shutting down")
+
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer shutdownCancel()
+	_ = srv.Shutdown(shutdownCtx)
+	cancel() // stops the job-events subscription goroutine
 }

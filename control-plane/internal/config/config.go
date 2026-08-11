@@ -18,6 +18,12 @@ type Config struct {
 	// "let the SDK decide" (DOCKER_HOST env var, or the platform default
 	// -- npipe on Windows, unix socket on Linux/macOS).
 	DockerHost string `env:"DOCKER_HOST"`
+
+	// PostgresDSN and RedisAddr default to the host-run dev loop (go run/air
+	// against the compose-published ports); docker-compose overrides both
+	// to container names for the control-plane service itself.
+	PostgresDSN string `env:"POSTGRES_DSN" envDefault:"postgres://openscale:openscale@localhost:5432/openscale?sslmode=disable"`
+	RedisAddr   string `env:"REDIS_ADDR" envDefault:"localhost:6379"`
 }
 
 // Load reads Config from the process environment, applying defaults for

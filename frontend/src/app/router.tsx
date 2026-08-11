@@ -4,6 +4,7 @@ import { HomeScreen } from '@/domains/home/ui/HomeScreen';
 import { PipelinesScreen } from '@/domains/pipelines/ui/PipelinesScreen';
 import { SqlEditorScreen } from '@/domains/sql-editor/ui/SqlEditorScreen';
 import { DataCatalogScreen } from '@/domains/data-catalog/ui/DataCatalogScreen';
+import { NotebooksScreen } from '@/domains/notebooks/ui/NotebooksScreen';
 import { MlWorkbenchScreen } from '@/domains/ml-workbench/ui/MlWorkbenchScreen';
 import { StreamingScreen } from '@/domains/streaming/ui/StreamingScreen';
 import { DashboardsScreen } from '@/domains/dashboards/ui/DashboardsScreen';
@@ -22,6 +23,7 @@ export const router = createBrowserRouter([
       { path: '/pipelines', element: <PipelinesScreen /> },
       { path: '/sql-editor', element: <SqlEditorScreen /> },
       { path: '/data-catalog', element: <DataCatalogScreen /> },
+      { path: '/notebooks', element: <NotebooksScreen /> },
       { path: '/ml-workbench', element: <MlWorkbenchScreen /> },
       { path: '/streaming', element: <StreamingScreen /> },
       { path: '/dashboards', element: <DashboardsScreen /> },
