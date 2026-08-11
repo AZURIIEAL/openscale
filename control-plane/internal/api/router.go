@@ -43,15 +43,22 @@ func NewRouter(
 
 	healthHandler := NewHealthHandler(watcher)
 	actionHandler := NewContainerActionHandler(watcher)
+	statsHandler := NewStatsHandler(watcher)
 	jobsHandler := NewJobsHandler(database, redisClient)
+	dashboardsHandler := NewDashboardsHandler(database)
 	r.Route("/api", func(r chi.Router) {
 		r.Get("/system-health", healthHandler.ServeHTTP)
 		r.Post("/services/{id}/start", actionHandler.Start)
 		r.Post("/services/{id}/stop", actionHandler.Stop)
 		r.Post("/services/{id}/restart", actionHandler.Restart)
+		r.Get("/container-stats", statsHandler.ServeHTTP)
 
 		r.Post("/jobs/{type}/run", jobsHandler.Run)
 		r.Get("/jobs/runs", jobsHandler.ListRuns)
+		r.Delete("/jobs/runs", jobsHandler.ClearRuns)
+
+		r.Get("/dashboards/overview", dashboardsHandler.Overview)
+		r.Get("/home/stats", dashboardsHandler.HomeStats)
 
 		r.Get("/ws/jobs/{id}", wsHandler.HandleJobWS)
 	})

@@ -20,7 +20,10 @@ const MOCK_RUNS: JobRun[] = [
 ];
 
 export const mockJobsGateway: JobsGateway = {
-  async fetchRuns() {
-    return MOCK_RUNS;
+  async fetchRuns({ limit = 20, offset = 0 } = {}) {
+    return { runs: MOCK_RUNS.slice(offset, offset + limit), hasMore: offset + limit < MOCK_RUNS.length };
+  },
+  async clearRuns() {
+    MOCK_RUNS.length = 0;
   },
 };

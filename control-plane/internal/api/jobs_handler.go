@@ -74,7 +74,14 @@ func (h *JobsHandler) Run(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(run)
 }
 
-// ListRuns handles GET /api/jobs/runs?limit=20.
+// ListRunsResponse wraps the page of runs with whether older rows remain,
+// so the frontend can render/disable a next-page arrow without a count query.
+type ListRunsResponse struct {
+	Runs    []jobs.Run `json:"runs"`
+	HasMore bool       `json:"hasMore"`
+}
+
+// ListRuns handles GET /api/jobs/runs?limit=10&offset=0.
 func (h *JobsHandler) ListRuns(w http.ResponseWriter, r *http.Request) {
 	limit := 20
 	if v := r.URL.Query().Get("limit"); v != "" {
@@ -82,16 +89,36 @@ func (h *JobsHandler) ListRuns(w http.ResponseWriter, r *http.Request) {
 			limit = n
 		}
 	}
+	offset := 0
+	if v := r.URL.Query().Get("offset"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n >= 0 {
+			offset = n
+		}
+	}
 
 	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 	defer cancel()
 
-	runs, err := h.db.ListJobRuns(ctx, limit)
+	runs, hasMore, err := h.db.ListJobRuns(ctx, limit, offset)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(runs)
+	_ = json.NewEncoder(w).Encode(ListRunsResponse{Runs: runs, HasMore: hasMore})
+}
+
+// ClearRuns handles DELETE /api/jobs/runs, removing every terminal run so
+// the history table can be reset. In-flight (queued/running) rows are left
+// alone -- see db.ClearTerminalRuns.
+func (h *JobsHandler) ClearRuns(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+	defer cancel()
+
+	if err := h.db.ClearTerminalRuns(ctx); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }

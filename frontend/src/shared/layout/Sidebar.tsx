@@ -33,12 +33,12 @@ export function Sidebar({ servicesUp, servicesTotal, overallStatus, isOpen, onCl
         }`}
         style={{ margin: '14px 0 14px 14px', padding: '22px 16px' }}
       >
-        <div className="flex items-start justify-between">
+        <div className="flex items-start justify-between px-2.5">
           <div>
             <span className="os-font-display text-[22px] uppercase tracking-wide">
               Open<span style={{ color: 'var(--accent)' }}>Scale</span>
             </span>
-            <div className="os-font-mono mt-[-2px] text-[10px] uppercase tracking-[0.08em]" style={{ color: 'var(--ink-faint)' }}>
+            <div className="os-font-mono text-[10px] uppercase tracking-[0.12em]" style={{ color: 'var(--ink-faint)' }}>
               Control Console
             </div>
           </div>
@@ -86,15 +86,18 @@ function NavItemLink({ entry, onNavigate }: { entry: NavEntry; onNavigate: () =>
       className="os-nav-item flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-left text-[13px] font-semibold no-underline"
       style={({ isActive }) => ({ color: isActive ? undefined : 'var(--ink-muted)' })}
     >
-      {({ isActive }) => (
-        <>
-          <span
-            className="h-1.5 w-1.5 flex-shrink-0 rounded-full"
-            style={{ background: isActive ? 'var(--accent)' : 'var(--ink-faint)' }}
-          />
-          {entry.label}
-        </>
-      )}
+      {({ isActive }) => {
+        const Icon = entry.icon;
+        return (
+          <>
+            <Icon
+              className="h-4 w-4 flex-shrink-0"
+              style={{ color: isActive ? 'var(--accent)' : 'var(--ink-faint)' }}
+            />
+            {entry.label}
+          </>
+        );
+      }}
     </NavLink>
   );
 }

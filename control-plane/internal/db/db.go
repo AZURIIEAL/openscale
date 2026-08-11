@@ -45,13 +45,13 @@ func New(pool *pgxpool.Pool) *DB {
 // id is cast to text explicitly rather than relying on pgx's implicit
 // uuid->string scan support, which varies by version -- this guarantees a
 // plain string lands in jobs.Run.ID regardless.
-const runColumns = `id::text, job_type, params, status, submitted_at, started_at, finished_at, error, log_output`
+const runColumns = `id::text, job_type, params, status, submitted_at, started_at, finished_at, error, log_output, rows_processed`
 
 func scanRun(row pgx.Row) (jobs.Run, error) {
 	var run jobs.Run
 	err := row.Scan(
 		&run.ID, &run.JobType, &run.Params, &run.Status, &run.SubmittedAt,
-		&run.StartedAt, &run.FinishedAt, &run.Error, &run.LogOutput,
+		&run.StartedAt, &run.FinishedAt, &run.Error, &run.LogOutput, &run.RowsProcessed,
 	)
 	return run, err
 }
@@ -71,14 +71,16 @@ func (d *DB) InsertJobRun(ctx context.Context, jobType string, params []byte) (j
 	return run, nil
 }
 
-// ListJobRuns returns the most recent runs, newest first.
-func (d *DB) ListJobRuns(ctx context.Context, limit int) ([]jobs.Run, error) {
+// ListJobRuns returns up to `limit` runs starting at `offset`, newest first,
+// plus whether more rows exist beyond this page. It fetches limit+1 rows and
+// trims the extra one rather than running a separate COUNT query.
+func (d *DB) ListJobRuns(ctx context.Context, limit, offset int) ([]jobs.Run, bool, error) {
 	rows, err := d.pool.Query(ctx,
-		`SELECT `+runColumns+` FROM control_plane.job_runs ORDER BY submitted_at DESC LIMIT $1`,
-		limit,
+		`SELECT `+runColumns+` FROM control_plane.job_runs ORDER BY submitted_at DESC LIMIT $1 OFFSET $2`,
+		limit+1, offset,
 	)
 	if err != nil {
-		return nil, fmt.Errorf("db: list job runs: %w", err)
+		return nil, false, fmt.Errorf("db: list job runs: %w", err)
 	}
 	defer rows.Close()
 
@@ -86,11 +88,32 @@ func (d *DB) ListJobRuns(ctx context.Context, limit int) ([]jobs.Run, error) {
 	for rows.Next() {
 		run, err := scanRun(rows)
 		if err != nil {
-			return nil, fmt.Errorf("db: scan job run: %w", err)
+			return nil, false, fmt.Errorf("db: scan job run: %w", err)
 		}
 		runs = append(runs, run)
 	}
-	return runs, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, false, err
+	}
+
+	hasMore := len(runs) > limit
+	if hasMore {
+		runs = runs[:limit]
+	}
+	return runs, hasMore, nil
+}
+
+// ClearTerminalRuns deletes every run that isn't currently queued or
+// running, so "clear history" can't make an in-flight job's row vanish out
+// from under its live log panel.
+func (d *DB) ClearTerminalRuns(ctx context.Context) error {
+	_, err := d.pool.Exec(ctx,
+		`DELETE FROM control_plane.job_runs WHERE status NOT IN ('queued', 'running')`,
+	)
+	if err != nil {
+		return fmt.Errorf("db: clear terminal runs: %w", err)
+	}
+	return nil
 }
 
 // GetJobRun fetches a single run by ID.

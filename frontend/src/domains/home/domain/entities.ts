@@ -22,6 +22,7 @@ export interface PipelineRunSummary {
   startedAt: string;
   durationLabel: string;
   status: Status;
+  rowsProcessed?: number;
 }
 
 export interface RevenueTrend {
@@ -36,4 +37,28 @@ export interface HomeOverview {
   revenueTrend: RevenueTrend;
   stats: HomeStat[];
   recentRuns: PipelineRunSummary[];
+}
+
+export interface ContainerResourceStat {
+  id: string;
+  name: string;
+  image: string;
+  cpuPercent: number;
+  memUsageBytes: number;
+  memLimitBytes: number;
+  memPercent: number;
+}
+
+export interface ResourceTotals {
+  /** Host-wide: 100 == every online core fully busy across all containers. */
+  cpuPercent: number;
+  memUsedBytes: number;
+  memTotalBytes: number;
+  memPercent: number;
+  numCpu: number;
+}
+
+export interface ContainerStatsSnapshot {
+  containers: ContainerResourceStat[];
+  totals: ResourceTotals;
 }

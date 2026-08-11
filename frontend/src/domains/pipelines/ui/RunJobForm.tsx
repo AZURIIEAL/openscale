@@ -6,6 +6,8 @@ interface RunJobFormProps {
   fields: JobParamField[];
   pending: boolean;
   onSubmit: (params: Record<string, string>) => void;
+  /** Reused for Run All's date-range prompt, which needs its own label. */
+  submitLabel?: string;
 }
 
 const MONTH_FIELDS = new Set(['start', 'end']);
@@ -99,7 +101,7 @@ function MonthYearField({
   );
 }
 
-export function RunJobForm({ fields, pending, onSubmit }: RunJobFormProps) {
+export function RunJobForm({ fields, pending, onSubmit, submitLabel = 'Start run' }: RunJobFormProps) {
   const [values, setValues] = useState<Record<string, { month: string; year: string }>>({});
 
   const composed = useMemo(() => {
@@ -137,7 +139,7 @@ export function RunJobForm({ fields, pending, onSubmit }: RunJobFormProps) {
         ) : null,
       )}
       <RunButton type="submit" disabled={!canSubmit}>
-        {pending ? 'Starting…' : 'Start run'}
+        {pending ? 'Starting…' : submitLabel}
       </RunButton>
       {rangeError && (
         <span className="os-font-mono text-[11.5px]" style={{ color: 'var(--crit)' }}>

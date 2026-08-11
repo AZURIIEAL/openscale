@@ -12,10 +12,14 @@ from datetime import datetime, timezone
 
 import db
 import redis_client
-from jobs import ingest
+from jobs import features, gold, ingest, silver, train
 
 JOB_TABLE = {
     "ingest": ingest.run,
+    "silver": silver.run,
+    "gold": gold.run,
+    "features": features.run,
+    "train": train.run,
 }
 
 STREAM = "openscale:jobs:requests"
@@ -45,8 +49,17 @@ def handle_message(r, fields: dict) -> None:
         def on_log_line(line: str) -> None:
             redis_client.publish_event(r, {"job_id": job_id, "type": "log", "line": line, "at": now_iso()})
 
-        status, error, log_lines = handler(params, on_log_line)
-        db.mark_terminal(conn, job_id, status, 0 if status == "succeeded" else 1, error, "\n".join(log_lines))
+        status, error, log_lines, rows_processed, metrics = handler(params, on_log_line)
+        db.mark_terminal(
+            conn,
+            job_id,
+            status,
+            0 if status == "succeeded" else 1,
+            error,
+            "\n".join(log_lines),
+            rows_processed,
+            metrics,
+        )
         redis_client.publish_event(r, {"job_id": job_id, "type": "status", "status": status, "at": now_iso()})
     finally:
         conn.close()

@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { httpJobsGateway } from '../infrastructure/httpJobsGateway';
 
 /**
@@ -7,10 +7,23 @@ import { httpJobsGateway } from '../infrastructure/httpJobsGateway';
  */
 const gateway = httpJobsGateway;
 
-export function useJobRuns() {
+export const RUNS_PAGE_SIZE = 10;
+
+export function useJobRunsPage(page: number) {
   return useQuery({
-    queryKey: ['pipelines', 'runs'],
-    queryFn: () => gateway.fetchRuns(),
+    queryKey: ['pipelines', 'runs', page],
+    queryFn: () => gateway.fetchRuns({ limit: RUNS_PAGE_SIZE, offset: page * RUNS_PAGE_SIZE }),
     refetchInterval: 10_000,
+  });
+}
+
+export function useClearRuns() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => gateway.clearRuns(),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['pipelines', 'runs'] });
+      queryClient.invalidateQueries({ queryKey: ['home', 'overview'] });
+    },
   });
 }

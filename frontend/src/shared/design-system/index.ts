@@ -14,3 +14,15 @@ export { BrokenHeartIcon } from './BrokenHeartIcon';
 export { RestartIcon } from './RestartIcon';
 export { PlayIcon } from './PlayIcon';
 export { StopIcon } from './StopIcon';
+export {
+  HomeIcon,
+  PipelinesIcon,
+  SqlEditorIcon,
+  DataCatalogIcon,
+  NotebooksIcon,
+  MlWorkbenchIcon,
+  StreamingIcon,
+  DashboardsIcon,
+  InfrastructureIcon,
+  ConnectionsIcon,
+} from './NavIcons';

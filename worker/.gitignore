@@ -2,5 +2,11 @@
 # git. Mirrors etl-exposure/.gitignore's same data/raw/ exclusion.
 data/
 
+# Runtime output from the Silver/Train jobs, and cached Maven/Ivy jars for
+# the Gold/Features/Train jobs' Spark sessions -- all regenerable.
+docs/quality-reports/
+ml/mlflow/
+.ivy2/
+
 __pycache__/
 *.py[cod]

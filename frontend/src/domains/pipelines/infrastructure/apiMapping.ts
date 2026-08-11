@@ -14,6 +14,7 @@ export interface ApiJobRun {
   finishedAt?: string;
   error?: string;
   logOutput?: string;
+  rowsProcessed?: number;
 }
 
 export function mapApiJobRun(api: ApiJobRun): JobRun {
@@ -26,5 +27,6 @@ export function mapApiJobRun(api: ApiJobRun): JobRun {
     startedAt: api.startedAt,
     finishedAt: api.finishedAt,
     error: api.error,
+    rowsProcessed: api.rowsProcessed,
   };
 }

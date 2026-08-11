@@ -138,10 +138,26 @@ services:
       REDIS_ADDR: "redis:6379"
       POSTGRES_DSN: "postgresql://openscale:openscale@postgres:5432/openscale"
       MINIO_ENDPOINT: "http://minio:9000"
+      # In local[*] mode there's no separate executor JVM -- this is the
+      # *only* heap budget for the whole Spark job, driver + all parallel
+      # tasks. 2g OOM'd Train's full-dataset scan+sample+toPandas() at the
+      # real 40-month (~140M row) data volume already present in this
+      # environment's MinIO volume; 6g (vs. etl-exposure's original
+      # hardcoded 8g) leaves headroom for the other 8 compose services on
+      # a 16GB Docker allocation.
+      SPARK_DRIVER_MEMORY: "6g"
     volumes:
       # rw: downloaded raw parquet lands here, persists across rebuilds and
       # is visible on the host for inspection.
       - ./worker/data:/app/data
+      # rw: Silver's per-period quality-report JSON.
+      - ./worker/docs:/app/docs
+      # rw: MLflow's sqlite tracking db + logged model artifacts.
+      - ./worker/ml:/app/ml
+      # Cached Maven/Ivy-resolved jars (hadoop-aws + transitive deps) for
+      # the Gold/Features/Train Spark sessions -- avoids re-downloading on
+      # every image rebuild.
+      - ./worker/.ivy2:/root/.ivy2
     depends_on:
       redis:
         condition: service_started

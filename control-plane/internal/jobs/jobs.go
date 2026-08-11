@@ -36,6 +36,10 @@ type Run struct {
 	FinishedAt  *time.Time      `json:"finishedAt,omitempty"`
 	Error       *string         `json:"error,omitempty"`
 	LogOutput   *string         `json:"logOutput,omitempty"`
+	// RowsProcessed is set by the worker itself at mark_terminal time --
+	// not every job type can report it cheaply (Gold's outputs are
+	// aggregate tables, not a row-for-row count), so it stays nil there.
+	RowsProcessed *int64 `json:"rowsProcessed,omitempty"`
 }
 
 // Definition describes one triggerable job type, shown in the frontend's
@@ -51,6 +55,10 @@ type Definition struct {
 
 var Catalog = []Definition{
 	{Type: "ingest", Label: "Ingest (Bronze)", Description: "Download/validate TLC parquet, write to Bronze"},
+	{Type: "silver", Label: "Validate (Silver)", Description: "Bronze -> Silver: reject/quarantine/flag invalid rows, write clean trips"},
+	{Type: "gold", Label: "Aggregate (Gold)", Description: "Silver -> Gold: daily revenue, hourly demand, zone stats, congestion metrics"},
+	{Type: "features", Label: "Compute Features", Description: "Silver -> zone x hour features, written to Postgres and Redis"},
+	{Type: "train", Label: "Train Fare Model", Description: "Samples Silver trips, trains a fare-prediction model, logs it to MLflow"},
 }
 
 // IsKnownJobType reports whether type is triggerable -- checked before

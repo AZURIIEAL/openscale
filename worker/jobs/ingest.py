@@ -10,8 +10,11 @@ from ingestion.downloader.downloader import month_range
 from ingestion.run_ingestion import run as run_ingestion
 
 
-def run(params: dict, on_log_line: Callable[[str], None]) -> tuple[str, str | None, list[str]]:
-    """Runs the ingest job. Returns (status, error, log_lines).
+def run(
+    params: dict, on_log_line: Callable[[str], None]
+) -> tuple[str, str | None, list[str], int | None, dict | None]:
+    """Runs the ingest job. Returns (status, error, log_lines, rows_processed, metrics).
+    metrics is always None here -- only the train job reports metrics.
 
     run_ingestion never raises for an individual period's UNAVAILABLE/
     REJECTED outcome -- those are yielded as normal result dicts (matching
@@ -30,6 +33,7 @@ def run(params: dict, on_log_line: Callable[[str], None]) -> tuple[str, str | No
 
     log_lines: list[str] = []
     ok_count = 0
+    rows_processed = 0
     failed_periods: list[str] = []
     try:
         for result in run_ingestion(periods):
@@ -38,17 +42,18 @@ def run(params: dict, on_log_line: Callable[[str], None]) -> tuple[str, str | No
             on_log_line(line)
             if result.get("status") == "OK":
                 ok_count += 1
+                rows_processed += result.get("rows", 0)
             else:
                 failed_periods.append(f"{result.get('period')}: {result.get('status')} ({result.get('reason')})")
     except Exception as exc:
         error = f"{type(exc).__name__}: {exc}"
         log_lines.append(error)
         on_log_line(error)
-        return "failed", error, log_lines
+        return "failed", error, log_lines, rows_processed or None, None
 
     if not failed_periods:
-        return "succeeded", None, log_lines
+        return "succeeded", None, log_lines, rows_processed, None
     error = "; ".join(failed_periods)
     if ok_count == 0:
-        return "failed", error, log_lines
-    return "partial", error, log_lines
+        return "failed", error, log_lines, None, None
+    return "partial", error, log_lines, rows_processed, None

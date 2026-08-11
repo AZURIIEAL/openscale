@@ -25,6 +25,13 @@ export async function apiPost<T>(path: string, body?: unknown): Promise<T> {
   return res.json() as Promise<T>;
 }
 
+export async function apiDelete(path: string): Promise<void> {
+  const res = await fetch(`${API_BASE_URL}${path}`, { method: 'DELETE' });
+  if (!res.ok) {
+    throw new Error(`DELETE ${path} failed: ${res.status} ${res.statusText}`);
+  }
+}
+
 /** Builds a ws://.../wss://... URL from the same base the HTTP helpers use. */
 export function wsUrl(path: string): string {
   return `${API_BASE_URL.replace(/^http/, 'ws')}${path}`;

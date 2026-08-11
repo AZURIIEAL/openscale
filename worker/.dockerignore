@@ -1,0 +1,6 @@
+data/
+docs/quality-reports/
+ml/mlflow/
+.ivy2/
+__pycache__/
+*.py[cod]

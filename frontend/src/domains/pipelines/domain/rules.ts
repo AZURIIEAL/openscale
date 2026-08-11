@@ -31,3 +31,25 @@ export function stateLabel(state: JobState): string {
       return 'queued';
   }
 }
+
+/** Shared by JobRunsTable (Pipelines) and RecentRunsTable (Home). */
+export function formatRunTime(iso?: string): string {
+  return iso ? new Date(iso).toLocaleTimeString() : '—';
+}
+
+export function formatRunRows(rowsProcessed?: number): string {
+  return rowsProcessed === undefined ? '—' : rowsProcessed.toLocaleString();
+}
+
+/** e.g. "12s (running)" while in progress, "3m 4s" once finished. */
+export function formatRunDuration(
+  startedAt: string | undefined,
+  finishedAt: string | undefined,
+  state: JobState,
+): string {
+  if (!startedAt) return state === 'queued' ? '(queued)' : '—';
+  const endMs = finishedAt ? new Date(finishedAt).getTime() : Date.now();
+  const seconds = Math.max(0, Math.round((endMs - new Date(startedAt).getTime()) / 1000));
+  const label = seconds < 60 ? `${seconds}s` : `${Math.floor(seconds / 60)}m ${seconds % 60}s`;
+  return finishedAt ? label : `${label} (running)`;
+}

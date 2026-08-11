@@ -5,6 +5,7 @@ touches psycopg2. Writes directly to the control_plane.job_runs table
 import os
 
 import psycopg2
+import psycopg2.extras
 
 POSTGRES_DSN = os.environ.get(
     "POSTGRES_DSN",
@@ -24,13 +25,31 @@ def mark_running(conn, job_id: str) -> None:
         )
 
 
-def mark_terminal(conn, job_id: str, status: str, exit_code: int | None, error: str | None, log_output: str) -> None:
+def mark_terminal(
+    conn,
+    job_id: str,
+    status: str,
+    exit_code: int | None,
+    error: str | None,
+    log_output: str,
+    rows_processed: int | None = None,
+    metrics: dict | None = None,
+) -> None:
     with conn, conn.cursor() as cur:
         cur.execute(
             """
             UPDATE control_plane.job_runs
-            SET status = %s, finished_at = now(), exit_code = %s, error = %s, log_output = %s
+            SET status = %s, finished_at = now(), exit_code = %s, error = %s, log_output = %s,
+                rows_processed = %s, metrics = %s
             WHERE id = %s
             """,
-            (status, exit_code, error, log_output, job_id),
+            (
+                status,
+                exit_code,
+                error,
+                log_output,
+                rows_processed,
+                psycopg2.extras.Json(metrics) if metrics is not None else None,
+                job_id,
+            ),
         )

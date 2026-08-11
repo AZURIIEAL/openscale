@@ -35,7 +35,7 @@ export const useThemeStore = create<ThemeState>()(
   persist(
     (set) => ({
       themeOverride: 'light',
-      isFlat: false,
+      isFlat: true,
       accentId: DEFAULT_ACCENT_ID,
       shadowScale: 1,
       uiScale: 1,
