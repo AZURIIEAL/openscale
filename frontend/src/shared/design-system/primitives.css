@@ -225,9 +225,15 @@
     left 0.16s ease,
     background 0.16s ease;
 }
+.os-toggle[aria-checked='true'] {
+  background: var(--accent);
+}
 .os-toggle[aria-checked='true'] .os-toggle-knob {
   left: 19px;
-  background: var(--accent);
+  /* --accent-ink is defined specifically to contrast against --accent, so
+     the knob stays legible against the now-accent-colored track without a
+     dedicated token. */
+  background: var(--accent-ink);
 }
 .os-toggle:focus-visible {
   outline: 2px solid var(--accent);

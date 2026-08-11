@@ -1,6 +1,11 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { JobRun, JobState } from '../domain/entities';
 import { waitForRunTerminal } from './waitForRunTerminal';
+
+/** How long the "All N steps complete" banner and each row's "Completed"
+ * pill stay up before the screen reverts to its default state. Long enough
+ * to read, short enough not to look stuck. */
+const DONE_RESET_DELAY_MS = 2500;
 
 /** Dependency order -- each stage reads the previous stage's output. */
 export const PIPELINE_ORDER = ['ingest', 'silver', 'gold', 'features', 'train'] as const;
@@ -24,6 +29,17 @@ type TriggerFn = (args: { jobType: string; params: Record<string, string> }) => 
  */
 export function useRunAllJobs(triggerRun: TriggerFn, onRunStarted: (runId: string) => void) {
   const [state, setState] = useState<RunAllState>({ phase: 'idle' });
+
+  // Once every step has finished, drop back to the default state on its
+  // own rather than leaving "All N steps complete" (and each row's
+  // "Completed" pill) up forever -- the user has to click "Run all" again
+  // either way, so there's nothing left for the done state to communicate
+  // after a moment.
+  useEffect(() => {
+    if (state.phase !== 'done') return;
+    const timer = setTimeout(() => setState({ phase: 'idle' }), DONE_RESET_DELAY_MS);
+    return () => clearTimeout(timer);
+  }, [state.phase]);
 
   async function runAll(range: Record<string, string>) {
     for (let i = 0; i < PIPELINE_ORDER.length; i++) {

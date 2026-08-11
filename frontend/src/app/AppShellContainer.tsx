@@ -3,23 +3,27 @@ import { AppShell } from '@/shared/layout/AppShell';
 import { useThemeStore } from './theme-store';
 import { resolveAccentPreset } from './accent-presets';
 import { useSystemHealthSummary } from '@/domains/system-health/application/useSystemHealthSummary';
+import { useAppearanceSync } from '@/domains/connections/application/useAppearanceSync';
 
 /**
- * Connects the presentational AppShell to its two data sources: appearance
- * (Zustand, UI-local, persisted to sessionStorage) and system health
- * (TanStack Query, server state). This is the container half of the
- * container/presentational split -- all the wiring lives here so AppShell
- * itself stays a pure layout component.
+ * Connects the presentational AppShell to its data sources: appearance
+ * (Zustand, UI-local, persisted to sessionStorage *and* the control-plane's
+ * DB -- see useAppearanceSync) and system health (TanStack Query, server
+ * state). This is the container half of the container/presentational split
+ * -- all the wiring lives here so AppShell itself stays a pure layout
+ * component.
  *
- * Note: flat-mode's, accent-color's, shadow-depth's, and font-size's
+ * Note: visual-mode's, accent-color's, shadow-depth's, and font-size's
  * *pickers* all live on the Connections screen, not here -- that screen
  * calls useThemeStore() independently to get their setters. This container
  * only reads the resulting state, to sync it onto <html> as an attribute
- * (data-flat) or CSS variable (--accent, --shadow-scale, --ui-scale) for
+ * (data-mode) or CSS variable (--accent, --shadow-scale, --ui-scale) for
  * tokens.css/primitives.css/index.css to pick up.
  */
 export function AppShellContainer() {
-  const { themeOverride, isFlat, accentId, shadowScale, uiScale, setDark } = useThemeStore();
+  useAppearanceSync();
+
+  const { themeOverride, visualMode, accentId, shadowScale, uiScale, setDark } = useThemeStore();
   const isDark = themeOverride === 'dark';
 
   const { data: health } = useSystemHealthSummary();
@@ -29,8 +33,8 @@ export function AppShellContainer() {
   }, [isDark]);
 
   useEffect(() => {
-    document.documentElement.setAttribute('data-flat', String(isFlat));
-  }, [isFlat]);
+    document.documentElement.setAttribute('data-mode', visualMode);
+  }, [visualMode]);
 
   useEffect(() => {
     const preset = resolveAccentPreset(accentId);

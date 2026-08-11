@@ -2,22 +2,56 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { DEFAULT_ACCENT_ID } from './accent-presets';
 
-type ThemeOverride = 'light' | 'dark';
+export type ThemeOverride = 'light' | 'dark';
+
+/** Interface style, applied as data-mode on <html> (see tokens.css). `flat`
+ * is the default -- the others (including the original `neumorphic` look)
+ * are opt-in from the Connections screen. */
+export type VisualMode =
+  | 'flat'
+  | 'neumorphic'
+  | 'elevated'
+  | 'glass'
+  | 'outlined'
+  | 'brutalist'
+  | 'clay'
+  | 'terminal'
+  | 'aurora'
+  | 'paper'
+  | 'skeuomorphic'
+  | 'high-contrast';
+
+export const DEFAULT_VISUAL_MODE: VisualMode = 'flat';
 
 interface ThemeState {
   themeOverride: ThemeOverride;
-  isFlat: boolean;
+  visualMode: VisualMode;
   /** Selected AccentPreset id (see accent-presets.ts). */
   accentId: string;
-  /** Multiplies every neomorphic box-shadow's offset/blur (primitives.css). 1 = default. */
+  /** Multiplies every neomorphic box-shadow's offset/blur (primitives.css). Only visible in `neumorphic` mode. 1 = default. */
   shadowScale: number;
   /** Zoom factor applied to #root (index.css) -- the app-wide "font size" control. 1 = 100%. */
   uiScale: number;
   setDark: (checked: boolean) => void;
-  setFlat: (checked: boolean) => void;
+  setVisualMode: (mode: VisualMode) => void;
   setAccent: (id: string) => void;
   setShadowScale: (value: number) => void;
   setUiScale: (value: number) => void;
+  /** Applies a full snapshot in one write (one persisted-storage flush and
+   * one re-render) -- used by useAppearanceSync to hydrate from the
+   * control-plane's stored settings on load, instead of five separate
+   * setters. */
+  hydrate: (settings: AppearanceSnapshot) => void;
+}
+
+/** The subset of ThemeState that's actually persisted server-side -- see
+ * domains/connections/application/useAppearanceSync.ts. */
+export interface AppearanceSnapshot {
+  themeOverride: ThemeOverride;
+  visualMode: VisualMode;
+  accentId: string;
+  shadowScale: number;
+  uiScale: number;
 }
 
 /**
@@ -35,15 +69,16 @@ export const useThemeStore = create<ThemeState>()(
   persist(
     (set) => ({
       themeOverride: 'light',
-      isFlat: true,
+      visualMode: DEFAULT_VISUAL_MODE,
       accentId: DEFAULT_ACCENT_ID,
       shadowScale: 1,
       uiScale: 1,
       setDark: (checked) => set({ themeOverride: checked ? 'dark' : 'light' }),
-      setFlat: (checked) => set({ isFlat: checked }),
+      setVisualMode: (mode) => set({ visualMode: mode }),
       setAccent: (id) => set({ accentId: id }),
       setShadowScale: (value) => set({ shadowScale: value }),
       setUiScale: (value) => set({ uiScale: value }),
+      hydrate: (settings) => set(settings),
     }),
     {
       name: 'openscale-appearance',

@@ -3,6 +3,7 @@ import { Panel } from '@/shared/design-system/Panel';
 import { Well } from '@/shared/design-system/Well';
 import { RunButton } from '@/shared/design-system/RunButton';
 import { Spinner } from '@/shared/design-system/Spinner';
+import { StatusPill } from '@/shared/design-system/StatusPill';
 import { JOB_CATALOG } from '../domain/entities';
 import { useClearRuns, useJobRunsPage } from '../application/useJobRuns';
 import { useTriggerJob } from '../application/useTriggerJob';
@@ -97,6 +98,22 @@ export function PipelinesScreen() {
             (run) => run.jobType === job.type && (run.state === 'queued' || run.state === 'running'),
           );
           const disabled = runAllActive || isPending;
+
+          // During Run All, every row other than the one currently in
+          // flight gets a static pill instead of the real per-run lookup
+          // above -- steps later in PIPELINE_ORDER haven't been triggered
+          // yet (so there's no run row for them to find), and steps earlier
+          // in it already went terminal (so runningRun no longer matches).
+          const stepIndex = runAllActive ? PIPELINE_ORDER.indexOf(job.type as (typeof PIPELINE_ORDER)[number]) : -1;
+          const runAllStepStatus =
+            stepIndex === -1 || runAll.state.phase !== 'running'
+              ? null
+              : stepIndex < runAll.state.stepIndex
+                ? 'completed'
+                : stepIndex > runAll.state.stepIndex
+                  ? 'queued'
+                  : null; // the in-flight step -- falls through to the runningRun spinner below
+
           return (
             <div key={job.type}>
               <Well className="flex flex-wrap items-center gap-3.5 px-4 py-3">
@@ -106,7 +123,11 @@ export function PipelinesScreen() {
                     {job.description}
                   </div>
                 </div>
-                {runningRun ? (
+                {runAllStepStatus === 'completed' ? (
+                  <StatusPill status="good">Completed</StatusPill>
+                ) : runAllStepStatus === 'queued' ? (
+                  <StatusPill status="warn">Queued</StatusPill>
+                ) : runningRun ? (
                   <button
                     type="button"
                     className="os-font-mono flex flex-shrink-0 items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.06em]"

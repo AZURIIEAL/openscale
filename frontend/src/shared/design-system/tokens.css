@@ -1,5 +1,5 @@
 /*
- * Canonical design tokens for the OpenScale neomorphic/skeuomorphic UI.
+ * Canonical design tokens for the OpenScale UI.
  * Source of truth: ideas/tech-stack.md "Visual design system — decided".
  * Do not fork these values into component files -- everything below reads
  * from these custom properties so the whole app re-themes from one place.
@@ -7,6 +7,8 @@
 
 :root {
   --bg: #e3e7ec;
+  --surface: #ffffff;
+  --surface-2: #eef1f5;
   --ink: #262b33;
   --ink-muted: #6b7480;
   --ink-faint: #9aa3ae;
@@ -20,12 +22,18 @@
   --shadow-lo-soft: rgba(163, 177, 198, 0.35);
   --shadow-hi-soft: rgba(255, 255, 255, 0.6);
   --hairline: rgba(38, 43, 51, 0.08);
+  --border: rgba(38, 43, 51, 0.18);
+  --border-strong: rgba(38, 43, 51, 0.32);
   color-scheme: light;
 
   /* Depth/scale controls (Connections screen) -- unitless multipliers, not
      color-dependent, so declared once here rather than duplicated across
-     the light/dark blocks below. --shadow-scale multiplies every box-shadow
-     offset/blur in primitives.css; --ui-scale drives #root's zoom in
+     the light/dark blocks below. --shadow-scale multiplies every scalable
+     shadow/glow/blur size below -- Neumorphic's emboss, Elevated/Paper's
+     drop shadow, Brutalist's offset, Clay's puff, Terminal/Aurora's glow,
+     Skeuomorphic's bevel, Glass's blur. Flat, Outlined, and High contrast
+     have no shadow at all, so it has no effect there (ConnectionsScreen
+     hides the slider for those three). --ui-scale drives #root's zoom in
      index.css. */
   --shadow-scale: 1;
   --ui-scale: 1;
@@ -37,6 +45,8 @@
    toggle or a persisted choice restored from sessionStorage. */
 :root[data-theme='dark'] {
   --bg: #22262c;
+  --surface: #2a2f37;
+  --surface-2: #1c2025;
   --ink: #e8eaed;
   --ink-muted: #9aa2ab;
   --ink-faint: #6c7480;
@@ -50,10 +60,14 @@
   --shadow-lo-soft: rgba(0, 0, 0, 0.4);
   --shadow-hi-soft: rgba(255, 255, 255, 0.03);
   --hairline: rgba(255, 255, 255, 0.07);
+  --border: rgba(255, 255, 255, 0.16);
+  --border-strong: rgba(255, 255, 255, 0.28);
   color-scheme: dark;
 }
 :root[data-theme='light'] {
   --bg: #e3e7ec;
+  --surface: #ffffff;
+  --surface-2: #eef1f5;
   --ink: #262b33;
   --ink-muted: #6b7480;
   --ink-faint: #9aa3ae;
@@ -67,29 +81,539 @@
   --shadow-lo-soft: rgba(163, 177, 198, 0.35);
   --shadow-hi-soft: rgba(255, 255, 255, 0.6);
   --hairline: rgba(38, 43, 51, 0.08);
+  --border: rgba(38, 43, 51, 0.18);
+  --border-strong: rgba(38, 43, 51, 0.32);
   color-scheme: light;
 }
 
-/* ---------- flat-mode override (see FlatModeToggle) ----------
-   Overrides box-shadow directly rather than nulling --shadow-lo/--shadow-hi,
-   since those tokens double as plain colors elsewhere (e.g. gauge track
-   strokes) -- zeroing the token itself would make those invisible too. */
-:root[data-flat='true'] .os-panel,
-:root[data-flat='true'] .os-panel-sm,
-:root[data-flat='true'] .os-well,
-:root[data-flat='true'] .os-icon-btn,
-:root[data-flat='true'] .os-toggle,
-:root[data-flat='true'] .os-run-btn {
+/* ---------- interface-style modes (see VisualModeSelector) ----------
+   `neomorphic` needs no override block -- it's exactly what primitives.css
+   already defines, unmodified, so it's the implicit default when data-mode
+   matches none of the blocks below (also the fallback if data-mode is ever
+   unset). Every other mode overrides the same primitive classes here.
+   Kept unlayered (unlike primitives.css's `@layer components`) so it always
+   wins the cascade regardless of selector order -- see primitives.css's
+   top-of-file note.
+
+   Toggle convention, applied identically in every mode below (including
+   primitives.css's base/Neumorphic rule): the TRACK fills solid var(--accent)
+   when checked and the knob switches to var(--accent-ink) -- a token already
+   defined to contrast against --accent -- rather than the other way around.
+   A colored knob alone read as "no color" in several modes; a fully-colored
+   track is unambiguous regardless of mode or accent choice.
+
+   Run button convention: never let a mode's "neutral surface" background
+   (var(--surface), a gradient, a cream tint, etc.) land on .os-run-btn.
+   Its text is var(--accent-ink), a token meant to contrast against
+   var(--accent) specifically -- put anything else behind it and the text
+   can go near-invisible. Every mode below gives .os-run-btn its own
+   accent-based background instead of sharing the panel/icon-btn rule. */
+
+/* Flat (default) -- solid surface color + a real border, no shadow at all.
+   Needs --surface distinct from --bg (not just a border) or panels
+   disappear into the page background entirely. No shadow of any kind to
+   scale, so --shadow-scale has no effect here (slider hidden). */
+:root[data-mode='flat'] .os-panel,
+:root[data-mode='flat'] .os-panel-sm,
+:root[data-mode='flat'] .os-icon-btn {
+  background: var(--surface);
+  border: 1px solid var(--border);
   box-shadow: none !important;
-  border: 1px solid var(--hairline);
 }
-:root[data-flat='true'] .os-toggle .os-toggle-knob {
+:root[data-mode='flat'] .os-well,
+:root[data-mode='flat'] .os-toggle {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
   box-shadow: none !important;
-  border: 1px solid var(--hairline);
 }
-:root[data-flat='true'] .os-nav-item[aria-current='page'],
-:root[data-flat='true'] .os-selectable[aria-selected='true'],
-:root[data-flat='true'] .os-lineage-node.active {
+:root[data-mode='flat'] .os-toggle[aria-checked='true'] {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+:root[data-mode='flat'] .os-toggle .os-toggle-knob {
+  background: var(--surface);
+  border: 1px solid var(--border);
   box-shadow: none !important;
-  background: var(--hairline);
+}
+:root[data-mode='flat'] .os-toggle[aria-checked='true'] .os-toggle-knob {
+  background: var(--accent-ink);
+  border-color: transparent;
+}
+:root[data-mode='flat'] .os-run-btn {
+  background: var(--accent);
+  border: 1px solid transparent;
+  box-shadow: none !important;
+}
+:root[data-mode='flat'] .os-nav-item[aria-current='page'],
+:root[data-mode='flat'] .os-selectable[aria-selected='true'],
+:root[data-mode='flat'] .os-lineage-node.active {
+  box-shadow: none !important;
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+}
+
+/* Elevated -- Material-style: solid surface, no border, real (non-inset,
+   single-direction) drop shadow for hierarchy instead of a dual-shadow
+   emboss. --shadow-scale multiplies the drop shadow's offset/blur. */
+:root[data-mode='elevated'] .os-panel,
+:root[data-mode='elevated'] .os-panel-sm,
+:root[data-mode='elevated'] .os-icon-btn {
+  background: var(--surface);
+  border: none;
+  box-shadow:
+    0 calc(1px * var(--shadow-scale)) calc(2px * var(--shadow-scale)) var(--shadow-lo-soft),
+    0 calc(4px * var(--shadow-scale)) calc(14px * var(--shadow-scale)) var(--shadow-lo) !important;
+}
+:root[data-mode='elevated'] .os-run-btn {
+  background: var(--accent);
+  border: none;
+  box-shadow:
+    0 calc(1px * var(--shadow-scale)) calc(2px * var(--shadow-scale)) var(--shadow-lo-soft),
+    0 calc(4px * var(--shadow-scale)) calc(14px * var(--shadow-scale)) var(--shadow-lo) !important;
+}
+:root[data-mode='elevated'] .os-well,
+:root[data-mode='elevated'] .os-toggle {
+  background: var(--surface-2);
+  border: none;
+  box-shadow: inset 0 calc(1px * var(--shadow-scale)) calc(3px * var(--shadow-scale)) var(--shadow-lo) !important;
+}
+:root[data-mode='elevated'] .os-toggle[aria-checked='true'] {
+  background: var(--accent);
+}
+:root[data-mode='elevated'] .os-toggle .os-toggle-knob {
+  background: var(--surface);
+  box-shadow: 0 calc(1px * var(--shadow-scale)) calc(3px * var(--shadow-scale)) var(--shadow-lo) !important;
+}
+:root[data-mode='elevated'] .os-toggle[aria-checked='true'] .os-toggle-knob {
+  background: var(--accent-ink);
+}
+:root[data-mode='elevated'] .os-nav-item[aria-current='page'],
+:root[data-mode='elevated'] .os-selectable[aria-selected='true'],
+:root[data-mode='elevated'] .os-lineage-node.active {
+  box-shadow: none !important;
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+}
+
+/* Glass -- translucent, blurred surfaces over the page background.
+   --shadow-scale multiplies the backdrop-blur radius. */
+:root[data-mode='glass'] .os-panel,
+:root[data-mode='glass'] .os-panel-sm,
+:root[data-mode='glass'] .os-icon-btn {
+  background: color-mix(in srgb, var(--surface) 55%, transparent);
+  border: 1px solid var(--border);
+  box-shadow: none !important;
+  backdrop-filter: blur(calc(16px * var(--shadow-scale))) saturate(160%);
+  -webkit-backdrop-filter: blur(calc(16px * var(--shadow-scale))) saturate(160%);
+}
+:root[data-mode='glass'] .os-well,
+:root[data-mode='glass'] .os-toggle {
+  background: color-mix(in srgb, var(--surface-2) 45%, transparent);
+  border: 1px solid var(--border);
+  box-shadow: none !important;
+  backdrop-filter: blur(calc(16px * var(--shadow-scale))) saturate(160%);
+  -webkit-backdrop-filter: blur(calc(16px * var(--shadow-scale))) saturate(160%);
+}
+:root[data-mode='glass'] .os-toggle[aria-checked='true'] {
+  background: color-mix(in srgb, var(--accent) 75%, transparent);
+}
+:root[data-mode='glass'] .os-toggle .os-toggle-knob {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  box-shadow: none !important;
+}
+:root[data-mode='glass'] .os-toggle[aria-checked='true'] .os-toggle-knob {
+  background: var(--accent-ink);
+  border-color: transparent;
+}
+:root[data-mode='glass'] .os-run-btn {
+  background: var(--accent);
+  border: 1px solid transparent;
+  box-shadow: none !important;
+}
+:root[data-mode='glass'] .os-nav-item[aria-current='page'],
+:root[data-mode='glass'] .os-selectable[aria-selected='true'],
+:root[data-mode='glass'] .os-lineage-node.active {
+  box-shadow: none !important;
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+}
+
+/* Outlined -- ink-only, wireframe-style: no surface fill, just a bolder
+   line. No shadow of any kind to scale, so the slider is hidden. */
+:root[data-mode='outlined'] .os-panel,
+:root[data-mode='outlined'] .os-panel-sm,
+:root[data-mode='outlined'] .os-well,
+:root[data-mode='outlined'] .os-icon-btn,
+:root[data-mode='outlined'] .os-toggle {
+  background: var(--bg);
+  border: 1.5px solid var(--border-strong);
+  box-shadow: none !important;
+}
+:root[data-mode='outlined'] .os-toggle[aria-checked='true'] {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+:root[data-mode='outlined'] .os-toggle .os-toggle-knob {
+  background: var(--bg);
+  border: 1.5px solid var(--border-strong);
+  box-shadow: none !important;
+}
+:root[data-mode='outlined'] .os-toggle[aria-checked='true'] .os-toggle-knob {
+  background: var(--accent-ink);
+  border-color: transparent;
+}
+:root[data-mode='outlined'] .os-run-btn {
+  background: transparent;
+  color: var(--accent);
+  border: 1.5px solid var(--accent);
+  box-shadow: none !important;
+}
+:root[data-mode='outlined'] .os-nav-item[aria-current='page'],
+:root[data-mode='outlined'] .os-selectable[aria-selected='true'],
+:root[data-mode='outlined'] .os-lineage-node.active {
+  box-shadow: none !important;
+  background: transparent;
+  border: 1px solid var(--accent);
+}
+
+/* Brutalist -- thick ink-colored borders + a hard, unblurred offset shadow.
+   --ink is dark in light theme and light in dark theme, so using it as the
+   shadow color keeps the shadow high-contrast in both without a dedicated
+   token. --shadow-scale multiplies the offset distance. */
+:root[data-mode='brutalist'] .os-panel,
+:root[data-mode='brutalist'] .os-panel-sm,
+:root[data-mode='brutalist'] .os-icon-btn {
+  background: var(--surface);
+  border: 2.5px solid var(--ink);
+  border-radius: 6px;
+  box-shadow: calc(5px * var(--shadow-scale)) calc(5px * var(--shadow-scale)) 0 var(--ink) !important;
+}
+:root[data-mode='brutalist'] .os-well,
+:root[data-mode='brutalist'] .os-toggle {
+  background: var(--surface-2);
+  border: 2px solid var(--ink);
+  box-shadow: none !important;
+}
+:root[data-mode='brutalist'] .os-well {
+  border-radius: 6px;
+}
+:root[data-mode='brutalist'] .os-toggle[aria-checked='true'] {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+:root[data-mode='brutalist'] .os-toggle .os-toggle-knob {
+  background: var(--ink);
+  border: none;
+  box-shadow: none !important;
+}
+:root[data-mode='brutalist'] .os-toggle[aria-checked='true'] .os-toggle-knob {
+  background: var(--accent-ink);
+}
+:root[data-mode='brutalist'] .os-run-btn {
+  background: var(--accent);
+  border: 2.5px solid var(--ink);
+  border-radius: 6px;
+  box-shadow: calc(4px * var(--shadow-scale)) calc(4px * var(--shadow-scale)) 0 var(--ink) !important;
+}
+:root[data-mode='brutalist'] .os-nav-item[aria-current='page'],
+:root[data-mode='brutalist'] .os-selectable[aria-selected='true'],
+:root[data-mode='brutalist'] .os-lineage-node.active {
+  box-shadow: none !important;
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+
+/* Clay (claymorphism) -- puffy, colorful soft-shadow surfaces: a tinted
+   outer glow plus inset highlight/shade. Larger radius and a colored
+   shadow are what separate this from Neumorphic's tight-radius, monochrome
+   emboss. --shadow-scale multiplies every shadow layer's offset/blur. */
+:root[data-mode='clay'] .os-panel,
+:root[data-mode='clay'] .os-panel-sm {
+  background: var(--surface);
+  border: none;
+  border-radius: 26px;
+  box-shadow:
+    0 calc(10px * var(--shadow-scale)) calc(24px * var(--shadow-scale)) color-mix(in srgb, var(--accent) 30%, transparent),
+    inset 0 calc(2px * var(--shadow-scale)) calc(2px * var(--shadow-scale)) color-mix(in srgb, white 45%, transparent),
+    inset 0 calc(-8px * var(--shadow-scale)) calc(12px * var(--shadow-scale)) color-mix(in srgb, var(--accent) 16%, transparent) !important;
+}
+:root[data-mode='clay'] .os-icon-btn {
+  background: var(--surface);
+  border: none;
+  border-radius: 14px;
+  box-shadow:
+    0 calc(6px * var(--shadow-scale)) calc(14px * var(--shadow-scale)) color-mix(in srgb, var(--accent) 30%, transparent),
+    inset 0 calc(2px * var(--shadow-scale)) calc(2px * var(--shadow-scale)) color-mix(in srgb, white 45%, transparent) !important;
+}
+:root[data-mode='clay'] .os-well,
+:root[data-mode='clay'] .os-toggle {
+  background: var(--surface-2);
+  border: none;
+  border-radius: 20px;
+  box-shadow:
+    inset 0 calc(4px * var(--shadow-scale)) calc(8px * var(--shadow-scale)) color-mix(in srgb, var(--accent) 18%, transparent),
+    inset 0 calc(-2px * var(--shadow-scale)) calc(2px * var(--shadow-scale)) color-mix(in srgb, white 30%, transparent) !important;
+}
+:root[data-mode='clay'] .os-toggle {
+  border-radius: 999px;
+}
+:root[data-mode='clay'] .os-toggle[aria-checked='true'] {
+  background: var(--accent);
+}
+:root[data-mode='clay'] .os-toggle .os-toggle-knob {
+  box-shadow:
+    0 calc(3px * var(--shadow-scale)) calc(6px * var(--shadow-scale)) color-mix(in srgb, var(--accent) 30%, transparent),
+    inset 0 1px 1px color-mix(in srgb, white 50%, transparent) !important;
+}
+:root[data-mode='clay'] .os-run-btn {
+  background: var(--accent);
+  border: none;
+  border-radius: 20px;
+  box-shadow:
+    0 calc(6px * var(--shadow-scale)) calc(16px * var(--shadow-scale)) color-mix(in srgb, var(--accent) 45%, transparent),
+    inset 0 calc(2px * var(--shadow-scale)) calc(2px * var(--shadow-scale)) color-mix(in srgb, white 35%, transparent) !important;
+}
+:root[data-mode='clay'] .os-nav-item[aria-current='page'],
+:root[data-mode='clay'] .os-selectable[aria-selected='true'],
+:root[data-mode='clay'] .os-lineage-node.active {
+  box-shadow: inset 0 calc(3px * var(--shadow-scale)) calc(6px * var(--shadow-scale)) color-mix(in srgb, var(--accent) 22%, transparent) !important;
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  border-radius: 14px;
+}
+
+/* Terminal -- monospace surfaces with a glowing accent border, evoking a
+   CRT/hacker aesthetic. Deliberately keeps --surface (theme-respecting)
+   rather than forcing a black background: children read var(--ink) for
+   text color directly, not inherited `color`, so a background the theme
+   doesn't know about would risk unreadable text. --shadow-scale multiplies
+   the glow radius. */
+:root[data-mode='terminal'] .os-panel,
+:root[data-mode='terminal'] .os-panel-sm,
+:root[data-mode='terminal'] .os-icon-btn {
+  background: var(--surface);
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--accent) 35%, transparent),
+    0 0 calc(18px * var(--shadow-scale)) color-mix(in srgb, var(--accent) 35%, transparent) !important;
+  font-family: 'Plex Mono', monospace;
+}
+:root[data-mode='terminal'] .os-well,
+:root[data-mode='terminal'] .os-toggle {
+  background: var(--surface-2);
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
+  box-shadow: none !important;
+}
+:root[data-mode='terminal'] .os-well {
+  border-radius: 8px;
+}
+:root[data-mode='terminal'] .os-toggle[aria-checked='true'] {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+:root[data-mode='terminal'] .os-toggle .os-toggle-knob {
+  box-shadow: none !important;
+}
+:root[data-mode='terminal'] .os-toggle[aria-checked='true'] .os-toggle-knob {
+  box-shadow: 0 0 calc(8px * var(--shadow-scale)) color-mix(in srgb, var(--accent) 60%, transparent) !important;
+}
+:root[data-mode='terminal'] .os-run-btn {
+  background: var(--accent);
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+  box-shadow: 0 0 calc(14px * var(--shadow-scale)) color-mix(in srgb, var(--accent) 50%, transparent) !important;
+  font-family: 'Plex Mono', monospace;
+}
+:root[data-mode='terminal'] .os-nav-item[aria-current='page'],
+:root[data-mode='terminal'] .os-selectable[aria-selected='true'],
+:root[data-mode='terminal'] .os-lineage-node.active {
+  box-shadow: none !important;
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  border-left: 2px solid var(--accent);
+}
+
+/* Aurora -- soft gradient wash + a diffuse colored ambient glow.
+   --shadow-scale multiplies the glow radius. */
+:root[data-mode='aurora'] .os-panel,
+:root[data-mode='aurora'] .os-panel-sm,
+:root[data-mode='aurora'] .os-icon-btn {
+  background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 14%, var(--surface)), var(--surface) 65%);
+  border: 1px solid var(--border);
+  box-shadow: 0 calc(8px * var(--shadow-scale)) calc(28px * var(--shadow-scale)) color-mix(in srgb, var(--accent) 22%, transparent) !important;
+}
+:root[data-mode='aurora'] .os-well,
+:root[data-mode='aurora'] .os-toggle {
+  background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 10%, var(--surface-2)), var(--surface-2) 70%);
+  border: 1px solid var(--border);
+  box-shadow: none !important;
+}
+:root[data-mode='aurora'] .os-toggle[aria-checked='true'] {
+  background: linear-gradient(135deg, var(--accent), color-mix(in srgb, var(--accent) 70%, white 30%));
+  border-color: var(--accent);
+}
+:root[data-mode='aurora'] .os-toggle .os-toggle-knob {
+  background: var(--surface);
+  box-shadow: 0 calc(2px * var(--shadow-scale)) calc(6px * var(--shadow-scale)) color-mix(in srgb, var(--accent) 30%, transparent) !important;
+}
+:root[data-mode='aurora'] .os-toggle[aria-checked='true'] .os-toggle-knob {
+  background: var(--accent-ink);
+}
+:root[data-mode='aurora'] .os-run-btn {
+  background: linear-gradient(135deg, var(--accent), color-mix(in srgb, var(--accent) 70%, white 30%));
+  border: none;
+  box-shadow: 0 calc(6px * var(--shadow-scale)) calc(20px * var(--shadow-scale)) color-mix(in srgb, var(--accent) 35%, transparent) !important;
+}
+:root[data-mode='aurora'] .os-nav-item[aria-current='page'],
+:root[data-mode='aurora'] .os-selectable[aria-selected='true'],
+:root[data-mode='aurora'] .os-lineage-node.active {
+  box-shadow: none !important;
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--accent) 20%, transparent),
+    color-mix(in srgb, var(--accent) 6%, transparent)
+  );
+}
+
+/* Paper -- warm, borderless "stacked sheet" look: a single soft shadow
+   instead of a border or emboss. --shadow-scale multiplies the shadow's
+   offset/blur. */
+:root[data-mode='paper'] .os-panel,
+:root[data-mode='paper'] .os-panel-sm,
+:root[data-mode='paper'] .os-icon-btn {
+  background: color-mix(in srgb, var(--surface) 92%, #f2e8d5 8%);
+  border: none;
+  border-radius: 4px;
+  box-shadow:
+    0 calc(1px * var(--shadow-scale)) calc(2px * var(--shadow-scale)) var(--shadow-lo-soft),
+    0 calc(10px * var(--shadow-scale)) calc(20px * var(--shadow-scale)) var(--shadow-lo-soft) !important;
+}
+:root[data-mode='paper'] .os-well,
+:root[data-mode='paper'] .os-toggle {
+  background: color-mix(in srgb, var(--surface-2) 92%, #f2e8d5 8%);
+  border: none;
+  box-shadow: inset 0 calc(1px * var(--shadow-scale)) calc(3px * var(--shadow-scale)) var(--shadow-lo-soft) !important;
+}
+:root[data-mode='paper'] .os-well {
+  border-radius: 4px;
+}
+:root[data-mode='paper'] .os-toggle {
+  border-radius: 999px;
+}
+:root[data-mode='paper'] .os-toggle[aria-checked='true'] {
+  background: var(--accent);
+}
+:root[data-mode='paper'] .os-toggle .os-toggle-knob {
+  box-shadow: 0 calc(1px * var(--shadow-scale)) calc(3px * var(--shadow-scale)) var(--shadow-lo-soft) !important;
+}
+:root[data-mode='paper'] .os-run-btn {
+  background: var(--accent);
+  border: none;
+  border-radius: 4px;
+  box-shadow:
+    0 calc(1px * var(--shadow-scale)) calc(2px * var(--shadow-scale)) var(--shadow-lo-soft),
+    0 calc(6px * var(--shadow-scale)) calc(14px * var(--shadow-scale)) color-mix(in srgb, var(--accent) 30%, transparent) !important;
+}
+:root[data-mode='paper'] .os-nav-item[aria-current='page'],
+:root[data-mode='paper'] .os-selectable[aria-selected='true'],
+:root[data-mode='paper'] .os-lineage-node.active {
+  box-shadow: none !important;
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  border-bottom: 2px solid var(--accent);
+}
+
+/* Skeuomorphic -- beveled, gradient "hardware button" surfaces: an inset
+   top highlight + bottom shade plus an outer drop shadow, instead of
+   Neumorphic's symmetric dual-corner emboss. --shadow-scale multiplies the
+   outer drop shadow (the inset highlight/shade lines stay a crisp 1px --
+   scaling them would blur the bevel edge rather than deepen it). */
+:root[data-mode='skeuomorphic'] .os-panel,
+:root[data-mode='skeuomorphic'] .os-panel-sm,
+:root[data-mode='skeuomorphic'] .os-icon-btn {
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, white 8%, var(--surface)),
+    var(--surface) 60%,
+    color-mix(in srgb, black 4%, var(--surface))
+  );
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, white 50%, transparent),
+    inset 0 -1px 0 var(--shadow-lo),
+    0 calc(3px * var(--shadow-scale)) calc(6px * var(--shadow-scale)) var(--shadow-lo),
+    0 calc(1px * var(--shadow-scale)) calc(2px * var(--shadow-scale)) var(--shadow-lo-soft) !important;
+}
+:root[data-mode='skeuomorphic'] .os-well,
+:root[data-mode='skeuomorphic'] .os-toggle {
+  background: linear-gradient(180deg, color-mix(in srgb, black 5%, var(--surface-2)), var(--surface-2) 60%);
+  border: 1px solid var(--border);
+  box-shadow: inset 0 calc(2px * var(--shadow-scale)) calc(4px * var(--shadow-scale)) var(--shadow-lo) !important;
+}
+:root[data-mode='skeuomorphic'] .os-well {
+  border-radius: 8px;
+}
+:root[data-mode='skeuomorphic'] .os-toggle {
+  border-radius: 999px;
+}
+:root[data-mode='skeuomorphic'] .os-toggle[aria-checked='true'] {
+  background: linear-gradient(180deg, color-mix(in srgb, white 15%, var(--accent)), var(--accent));
+}
+:root[data-mode='skeuomorphic'] .os-toggle .os-toggle-knob {
+  background: linear-gradient(180deg, color-mix(in srgb, white 20%, var(--surface)), var(--surface));
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, white 60%, transparent),
+    0 calc(1px * var(--shadow-scale)) calc(3px * var(--shadow-scale)) var(--shadow-lo) !important;
+}
+:root[data-mode='skeuomorphic'] .os-toggle[aria-checked='true'] .os-toggle-knob {
+  background: linear-gradient(180deg, color-mix(in srgb, white 30%, var(--accent-ink)), var(--accent-ink));
+}
+:root[data-mode='skeuomorphic'] .os-run-btn {
+  background: linear-gradient(180deg, color-mix(in srgb, white 15%, var(--accent)), var(--accent));
+  border: 1px solid color-mix(in srgb, black 10%, var(--accent));
+  border-radius: 10px;
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, white 40%, transparent),
+    0 calc(3px * var(--shadow-scale)) calc(6px * var(--shadow-scale)) var(--shadow-lo) !important;
+}
+:root[data-mode='skeuomorphic'] .os-nav-item[aria-current='page'],
+:root[data-mode='skeuomorphic'] .os-selectable[aria-selected='true'],
+:root[data-mode='skeuomorphic'] .os-lineage-node.active {
+  box-shadow: inset 0 calc(2px * var(--shadow-scale)) calc(4px * var(--shadow-scale)) var(--shadow-lo) !important;
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+
+/* High contrast -- pure-ink borders, no shadow, no color-only affordances:
+   active states pair a background fill with a border, not tint alone. No
+   shadow of any kind to scale, so the slider is hidden. */
+:root[data-mode='high-contrast'] .os-panel,
+:root[data-mode='high-contrast'] .os-panel-sm,
+:root[data-mode='high-contrast'] .os-well,
+:root[data-mode='high-contrast'] .os-icon-btn,
+:root[data-mode='high-contrast'] .os-toggle {
+  background: var(--surface);
+  border: 2.5px solid var(--ink);
+  box-shadow: none !important;
+}
+:root[data-mode='high-contrast'] .os-toggle[aria-checked='true'] {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+:root[data-mode='high-contrast'] .os-toggle .os-toggle-knob {
+  background: var(--ink);
+  border: none;
+  box-shadow: none !important;
+}
+:root[data-mode='high-contrast'] .os-toggle[aria-checked='true'] .os-toggle-knob {
+  background: var(--accent-ink);
+}
+:root[data-mode='high-contrast'] .os-run-btn {
+  background: var(--accent);
+  border: 2.5px solid var(--ink);
+  box-shadow: none !important;
+}
+:root[data-mode='high-contrast'] .os-nav-item[aria-current='page'],
+:root[data-mode='high-contrast'] .os-selectable[aria-selected='true'],
+:root[data-mode='high-contrast'] .os-lineage-node.active {
+  box-shadow: none !important;
+  background: var(--accent);
+  color: var(--accent-ink);
+  border: 2px solid var(--ink);
 }
