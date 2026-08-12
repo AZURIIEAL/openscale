@@ -116,6 +116,83 @@ func (d *DB) ClearTerminalRuns(ctx context.Context) error {
 	return nil
 }
 
+// CancelledRun pairs a now-cancelled run with whether it was `running`
+// (rather than merely `queued`) at the moment it got cancelled -- only a
+// `running` run needs the worker container restarted to actually stop; a
+// `queued` one is cooperatively skipped by the worker on its own (see
+// worker/db.py's mark_running).
+type CancelledRun struct {
+	Run        jobs.Run
+	WasRunning bool
+}
+
+// CancelActiveRuns transitions every queued or running run straight to
+// cancelled. RETURNING only ever reflects the row's *post*-update state, so
+// this reads the pre-update status first (locking the rows with FOR UPDATE
+// against a concurrent worker mark_running/mark_terminal) and updates by id,
+// all inside one transaction.
+func (d *DB) CancelActiveRuns(ctx context.Context) ([]CancelledRun, error) {
+	tx, err := d.pool.Begin(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("db: cancel active runs: begin: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
+	rows, err := tx.Query(ctx,
+		`SELECT id::text, status FROM control_plane.job_runs WHERE status IN ('queued', 'running') FOR UPDATE`,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("db: cancel active runs: select active: %w", err)
+	}
+	wasRunning := map[string]bool{}
+	var ids []string
+	for rows.Next() {
+		var id, status string
+		if err := rows.Scan(&id, &status); err != nil {
+			rows.Close()
+			return nil, fmt.Errorf("db: cancel active runs: scan active: %w", err)
+		}
+		ids = append(ids, id)
+		wasRunning[id] = status == string(jobs.StatusRunning)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	if len(ids) == 0 {
+		return nil, tx.Commit(ctx)
+	}
+
+	updated, err := tx.Query(ctx,
+		`UPDATE control_plane.job_runs
+		 SET status = 'cancelled', finished_at = now(), error = 'Cancelled by user'
+		 WHERE id = ANY($1::uuid[])
+		 RETURNING `+runColumns,
+		ids,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("db: cancel active runs: update: %w", err)
+	}
+	var cancelled []CancelledRun
+	for updated.Next() {
+		run, err := scanRun(updated)
+		if err != nil {
+			updated.Close()
+			return nil, fmt.Errorf("db: cancel active runs: scan updated: %w", err)
+		}
+		cancelled = append(cancelled, CancelledRun{Run: run, WasRunning: wasRunning[run.ID]})
+	}
+	updated.Close()
+	if err := updated.Err(); err != nil {
+		return nil, err
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("db: cancel active runs: commit: %w", err)
+	}
+	return cancelled, nil
+}
+
 // GetJobRun fetches a single run by ID.
 func (d *DB) GetJobRun(ctx context.Context, id string) (jobs.Run, error) {
 	row := d.pool.QueryRow(ctx,

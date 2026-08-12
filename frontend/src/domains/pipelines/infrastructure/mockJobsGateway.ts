@@ -26,4 +26,9 @@ export const mockJobsGateway: JobsGateway = {
   async clearRuns() {
     MOCK_RUNS.length = 0;
   },
+  async cancelAllRuns() {
+    for (const run of MOCK_RUNS) {
+      if (run.state === 'queued' || run.state === 'running') run.state = 'cancelled';
+    }
+  },
 };

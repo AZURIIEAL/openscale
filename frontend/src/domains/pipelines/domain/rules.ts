@@ -29,6 +29,8 @@ export function stateLabel(state: JobState): string {
       return 'running';
     case 'queued':
       return 'queued';
+    case 'cancelled':
+      return 'cancelled';
   }
 }
 

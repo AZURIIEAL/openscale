@@ -17,12 +17,20 @@ def get_connection():
     return psycopg2.connect(POSTGRES_DSN)
 
 
-def mark_running(conn, job_id: str) -> None:
+def mark_running(conn, job_id: str) -> bool:
+    """Transitions a run to 'running', but only if it's still 'queued' --
+    returns False without changing anything if the control-plane already
+    cancelled it out from under us (see api.CancelAll). This is the entire
+    cooperative-cancellation guard for queued jobs: no Redis Stream surgery
+    needed, the worker just declines to start work whose row already says
+    'cancelled'."""
     with conn, conn.cursor() as cur:
         cur.execute(
-            "UPDATE control_plane.job_runs SET status = 'running', started_at = now() WHERE id = %s",
+            "UPDATE control_plane.job_runs SET status = 'running', started_at = now() "
+            "WHERE id = %s AND status = 'queued'",
             (job_id,),
         )
+        return cur.rowcount > 0
 
 
 def mark_terminal(

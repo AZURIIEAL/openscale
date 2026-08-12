@@ -13,7 +13,7 @@ export const PIPELINE_ORDER = ['ingest', 'silver', 'gold', 'features', 'train'] 
 export type RunAllState =
   | { phase: 'idle' }
   | { phase: 'running'; stepIndex: number }
-  | { phase: 'stopped'; stepIndex: number; jobType: string }
+  | { phase: 'stopped'; stepIndex: number; jobType: string; finalState: 'failed' | 'cancelled' }
   | { phase: 'done' };
 
 type TriggerFn = (args: { jobType: string; params: Record<string, string> }) => Promise<JobRun>;
@@ -48,8 +48,8 @@ export function useRunAllJobs(triggerRun: TriggerFn, onRunStarted: (runId: strin
       const run = await triggerRun({ jobType, params: jobType === 'ingest' ? range : {} });
       onRunStarted(run.id);
       const finalState: JobState = await waitForRunTerminal(run.id);
-      if (finalState === 'failed') {
-        setState({ phase: 'stopped', stepIndex: i, jobType });
+      if (finalState === 'failed' || finalState === 'cancelled') {
+        setState({ phase: 'stopped', stepIndex: i, jobType, finalState });
         return;
       }
     }

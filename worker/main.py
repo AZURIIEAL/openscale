@@ -12,7 +12,7 @@ from datetime import datetime, timezone
 
 import db
 import redis_client
-from jobs import features, gold, ingest, silver, train
+from jobs import features, gold, ingest, reset, silver, train
 
 JOB_TABLE = {
     "ingest": ingest.run,
@@ -20,6 +20,7 @@ JOB_TABLE = {
     "gold": gold.run,
     "features": features.run,
     "train": train.run,
+    "reset": reset.run,
 }
 
 STREAM = "openscale:jobs:requests"
@@ -43,7 +44,9 @@ def handle_message(r, fields: dict) -> None:
             db.mark_terminal(conn, job_id, "failed", None, f"unknown job_type: {job_type}", "")
             return
 
-        db.mark_running(conn, job_id)
+        if not db.mark_running(conn, job_id):
+            return  # already cancelled before we got to it -- skip silently
+
         redis_client.publish_event(r, {"job_id": job_id, "type": "status", "status": "running", "at": now_iso()})
 
         def on_log_line(line: str) -> None:

@@ -44,7 +44,7 @@ func NewRouter(
 	healthHandler := NewHealthHandler(watcher)
 	actionHandler := NewContainerActionHandler(watcher)
 	statsHandler := NewStatsHandler(watcher)
-	jobsHandler := NewJobsHandler(database, redisClient)
+	jobsHandler := NewJobsHandler(database, redisClient, watcher)
 	dashboardsHandler := NewDashboardsHandler(database)
 	appearanceHandler := NewAppearanceHandler(database)
 	r.Route("/api", func(r chi.Router) {
@@ -57,6 +57,7 @@ func NewRouter(
 		r.Post("/jobs/{type}/run", jobsHandler.Run)
 		r.Get("/jobs/runs", jobsHandler.ListRuns)
 		r.Delete("/jobs/runs", jobsHandler.ClearRuns)
+		r.Post("/jobs/cancel-all", jobsHandler.CancelAll)
 
 		r.Get("/dashboards/overview", dashboardsHandler.Overview)
 		r.Get("/home/stats", dashboardsHandler.HomeStats)

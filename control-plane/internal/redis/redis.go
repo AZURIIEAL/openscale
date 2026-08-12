@@ -62,6 +62,18 @@ func (c *Client) EnqueueJob(ctx context.Context, req JobRequest) error {
 	}).Err()
 }
 
+// PublishJobEvent publishes a status/log event onto the same events channel
+// the worker publishes to -- lets the control-plane itself push a live
+// update (e.g. a cancel-all's synthetic "cancelled" status) through the
+// existing ws.Hub relay, which fans out by JobID regardless of publisher.
+func (c *Client) PublishJobEvent(ctx context.Context, event JobEvent) error {
+	payload, err := json.Marshal(event)
+	if err != nil {
+		return fmt.Errorf("redis: marshal job event: %w", err)
+	}
+	return c.rdb.Publish(ctx, eventsChannel, payload).Err()
+}
+
 // SubscribeJobEvents subscribes to the events channel and decodes each
 // message into a JobEvent, closing the returned channel when ctx is done.
 func (c *Client) SubscribeJobEvents(ctx context.Context) (<-chan JobEvent, error) {

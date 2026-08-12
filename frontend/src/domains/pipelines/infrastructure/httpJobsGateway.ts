@@ -1,4 +1,4 @@
-import { apiDelete, apiGet } from '@/shared/api/httpClient';
+import { apiDelete, apiGet, apiPost } from '@/shared/api/httpClient';
 import type { JobsGateway, RunsPage } from '../application/JobsGateway';
 import { mapApiJobRun, type ApiJobRun } from './apiMapping';
 
@@ -14,5 +14,8 @@ export const httpJobsGateway: JobsGateway = {
   },
   async clearRuns() {
     await apiDelete('/api/jobs/runs');
+  },
+  async cancelAllRuns() {
+    await apiPost('/api/jobs/cancel-all');
   },
 };

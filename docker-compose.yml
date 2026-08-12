@@ -181,6 +181,43 @@ services:
     command: start-notebook.py --ServerApp.root_dir=/home/jovyan/notebooks
     restart: unless-stopped
 
+  mlflow:
+    # Reuses the worker's own image (mlflow is already in its
+    # requirements.txt for the train job's in-process client) instead of a
+    # separate Dockerfile -- this service just runs `mlflow server` against
+    # the exact same tracking store the worker's train job already writes
+    # to, so nothing needs migrating.
+    build:
+      context: ./worker
+    container_name: openscale-mlflow
+    entrypoint: ["mlflow"]
+    command:
+      - server
+      - --backend-store-uri
+      - sqlite:////app/ml/mlflow/mlflow.db
+      - --default-artifact-root
+      - /app/ml/mlflow/artifacts
+      - --host
+      - "0.0.0.0"
+      - --port
+      - "5000"
+      # MLflow 3's security middleware sends X-Frame-Options: SAMEORIGIN by
+      # default, which would block the ML Workbench screen's iframe (a
+      # different origin, :5173 vs :5000). NONE is MLflow's own documented
+      # flag for "embed the UI in iframes from different origins" -- fine
+      # here since this whole stack is localhost-only, dev-only credentials
+      # throughout (see MinIO/Postgres/Grafana above).
+      - --x-frame-options
+      - "NONE"
+    ports:
+      - "5000:5000"
+    volumes:
+      # Same tracking db + artifacts the worker's train job writes to
+      # (worker/ml/training/train_fare_model.py's MLFLOW_TRACKING_URI) --
+      # shared, not copied, so runs show up here immediately.
+      - ./worker/ml:/app/ml
+    restart: unless-stopped
+
 volumes:
   # Explicit names, matching the volumes already populated by the original
   # (pre-restructure) "openscale" compose project -- pins these services to

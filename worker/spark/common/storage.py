@@ -34,3 +34,16 @@ def list_lake(*prefix_parts: str) -> list[str]:
     fs = fsspec.filesystem("s3", **STORAGE_OPTIONS)
     prefix = "/".join((LAKE_BUCKET, *prefix_parts))
     return sorted(fs.ls(prefix)) if fs.exists(prefix) else []
+
+
+def delete_prefix(*prefix_parts: str) -> int:
+    """Recursively deletes every object under a lake prefix (used by the
+    `reset` job to wipe Bronze/Silver/Gold). Returns the number of objects
+    deleted, 0 if the prefix didn't exist."""
+    fs = fsspec.filesystem("s3", **STORAGE_OPTIONS)
+    prefix = "/".join((LAKE_BUCKET, *prefix_parts))
+    if not fs.exists(prefix):
+        return 0
+    keys = fs.ls(prefix)
+    fs.rm(prefix, recursive=True)
+    return len(keys)

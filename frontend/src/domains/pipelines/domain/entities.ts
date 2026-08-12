@@ -1,4 +1,4 @@
-export type JobState = 'queued' | 'running' | 'succeeded' | 'partial' | 'failed';
+export type JobState = 'queued' | 'running' | 'succeeded' | 'partial' | 'failed' | 'cancelled';
 
 export interface JobRun {
   id: string;

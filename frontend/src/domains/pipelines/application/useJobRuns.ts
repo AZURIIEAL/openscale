@@ -27,3 +27,14 @@ export function useClearRuns() {
     },
   });
 }
+
+export function useCancelAllRuns() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => gateway.cancelAllRuns(),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['pipelines', 'runs'] });
+      queryClient.invalidateQueries({ queryKey: ['home', 'overview'] });
+    },
+  });
+}

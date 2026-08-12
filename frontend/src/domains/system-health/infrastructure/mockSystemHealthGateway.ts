@@ -18,6 +18,7 @@ const MOCK_SERVICES: ServiceHealth[] = [
   { id: 'grafana', name: 'Grafana', status: 'good', running: true, detail: 'up · :3000', consoleUrl: 'http://localhost:3000' },
   { id: 'worker', name: 'Worker', status: 'good', running: true, detail: 'idle · job queue' },
   { id: 'jupyter', name: 'Jupyter', status: 'good', running: true, detail: 'up · :8888', consoleUrl: 'http://localhost:8888/lab?token=openscale-dev' },
+  { id: 'mlflow', name: 'MLflow', status: 'good', running: true, detail: 'up · :5000', consoleUrl: 'http://localhost:5000' },
 ];
 
 export const mockSystemHealthGateway: SystemHealthGateway = {

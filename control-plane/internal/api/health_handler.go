@@ -26,6 +26,7 @@ var watchedServices = []docker.WatchedService{
 	{ID: "grafana", Name: "Grafana", ContainerName: "openscale-grafana", Label: ":3000", ConsoleURL: "http://localhost:3000"},
 	{ID: "worker", Name: "Worker", ContainerName: "openscale-worker", Label: "job queue"},
 	{ID: "jupyter", Name: "Jupyter", ContainerName: "openscale-jupyter", Label: ":8888", ConsoleURL: "http://localhost:8888/lab?token=openscale-dev"},
+	{ID: "mlflow", Name: "MLflow", ContainerName: "openscale-mlflow", Label: ":5000", ConsoleURL: "http://localhost:5000"},
 }
 
 // findWatchedService looks up a watched service by its API-facing ID (e.g.

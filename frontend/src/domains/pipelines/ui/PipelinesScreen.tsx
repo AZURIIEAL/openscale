@@ -5,12 +5,13 @@ import { RunButton } from '@/shared/design-system/RunButton';
 import { Spinner } from '@/shared/design-system/Spinner';
 import { StatusPill } from '@/shared/design-system/StatusPill';
 import { JOB_CATALOG } from '../domain/entities';
-import { useClearRuns, useJobRunsPage } from '../application/useJobRuns';
+import { useCancelAllRuns, useClearRuns, useJobRunsPage } from '../application/useJobRuns';
 import { useTriggerJob } from '../application/useTriggerJob';
 import { useRunAllJobs, PIPELINE_ORDER } from '../application/useRunAllJobs';
 import { RunJobForm } from './RunJobForm';
 import { JobRunsTable } from './JobRunsTable';
 import { JobRunLogPanel } from './JobRunLogPanel';
+import { ClearDataButton } from './ClearDataButton';
 
 const INGEST_FIELDS = JOB_CATALOG.find((job) => job.type === 'ingest')?.paramFields ?? [];
 
@@ -32,6 +33,7 @@ export function PipelinesScreen() {
   const runs = recentPage?.runs;
   const historyQuery = useJobRunsPage(historyPage);
   const clearRuns = useClearRuns();
+  const cancelAllRuns = useCancelAllRuns();
   const { mutate, mutateAsync, isPending } = useTriggerJob();
   const [openJobType, setOpenJobType] = useState<string | null>(null);
   const [runAllFormOpen, setRunAllFormOpen] = useState(false);
@@ -39,6 +41,7 @@ export function PipelinesScreen() {
 
   const runAll = useRunAllJobs(mutateAsync, setSelectedRunId);
   const runAllActive = runAll.state.phase === 'running';
+  const hasActiveRuns = runs?.some((run) => run.state === 'queued' || run.state === 'running') ?? false;
 
   // selectedRunId is component state, so a page refresh loses it -- if a
   // run is still queued/running when the run list loads, re-select it so
@@ -62,9 +65,26 @@ export function PipelinesScreen() {
               {runAll.state.phase === 'running' &&
                 `Step ${runAll.state.stepIndex + 1} of ${PIPELINE_ORDER.length} — ${PIPELINE_ORDER[runAll.state.stepIndex]}`}
               {runAll.state.phase === 'stopped' &&
-                `Stopped at step ${runAll.state.stepIndex + 1} of ${PIPELINE_ORDER.length} (${runAll.state.jobType} failed)`}
+                `Stopped at step ${runAll.state.stepIndex + 1} of ${PIPELINE_ORDER.length} (${runAll.state.jobType} ${runAll.state.finalState})`}
               {runAll.state.phase === 'done' && `All ${PIPELINE_ORDER.length} steps complete`}
             </span>
+          )}
+          {hasActiveRuns && (
+            <button
+              type="button"
+              disabled={cancelAllRuns.isPending}
+              className="os-font-mono text-[11px] font-semibold uppercase tracking-[0.06em]"
+              style={{
+                background: 'none',
+                border: 'none',
+                cursor: cancelAllRuns.isPending ? 'default' : 'pointer',
+                padding: 0,
+                color: 'var(--crit)',
+              }}
+              onClick={() => cancelAllRuns.mutate()}
+            >
+              {cancelAllRuns.isPending ? 'Stopping…' : 'Stop all'}
+            </button>
           )}
           <RunButton
             disabled={runAllActive || isPending}
@@ -182,6 +202,10 @@ export function PipelinesScreen() {
           );
         })}
       </Panel>
+
+      <div className="mb-4 flex items-center justify-end">
+        <ClearDataButton onRunStarted={setSelectedRunId} />
+      </div>
 
       {selectedRunId && (
         <div className="mb-4">

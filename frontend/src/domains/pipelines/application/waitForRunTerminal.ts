@@ -1,7 +1,7 @@
 import { wsUrl } from '@/shared/api/httpClient';
 import type { JobState } from '../domain/entities';
 
-const TERMINAL_STATES: JobState[] = ['succeeded', 'partial', 'failed'];
+const TERMINAL_STATES: JobState[] = ['succeeded', 'partial', 'failed', 'cancelled'];
 
 /**
  * Opens a WebSocket to the job's status stream and resolves once it

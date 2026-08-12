@@ -23,6 +23,10 @@ const (
 	// nothing succeeded at all.
 	StatusPartial Status = "partial"
 	StatusFailed  Status = "failed"
+	// StatusCancelled: the run was stopped by a user-initiated cancel-all
+	// before it reached a natural terminal state -- distinct from
+	// StatusFailed, which means the job itself errored out.
+	StatusCancelled Status = "cancelled"
 )
 
 // Run is one triggered job execution.
@@ -59,6 +63,12 @@ var Catalog = []Definition{
 	{Type: "gold", Label: "Aggregate (Gold)", Description: "Silver -> Gold: daily revenue, hourly demand, zone stats, congestion metrics"},
 	{Type: "features", Label: "Compute Features", Description: "Silver -> zone x hour features, written to Postgres and Redis"},
 	{Type: "train", Label: "Train Fare Model", Description: "Samples Silver trips, trains a fare-prediction model, logs it to MLflow"},
+	// "reset" is deliberately excluded from the frontend's own JOB_CATALOG
+	// mirror (frontend/src/domains/pipelines/domain/entities.ts) so it never
+	// shows up as a normal pipeline stage -- it's only reachable through the
+	// Pipelines screen's dedicated "Clear Data" control. It's listed here so
+	// IsKnownJobType/Run accept it like any other job type.
+	{Type: "reset", Label: "Clear Data", Description: "Wipe Bronze/Silver/Gold objects in MinIO and Gold/feature tables in Postgres"},
 }
 
 // IsKnownJobType reports whether type is triggerable -- checked before
