@@ -47,6 +47,7 @@ func NewRouter(
 	jobsHandler := NewJobsHandler(database, redisClient, watcher)
 	dashboardsHandler := NewDashboardsHandler(database)
 	appearanceHandler := NewAppearanceHandler(database)
+	queryHandler := NewQueryHandler(database)
 	r.Route("/api", func(r chi.Router) {
 		r.Get("/system-health", healthHandler.ServeHTTP)
 		r.Post("/services/{id}/start", actionHandler.Start)
@@ -64,6 +65,9 @@ func NewRouter(
 
 		r.Get("/appearance-settings", appearanceHandler.Get)
 		r.Put("/appearance-settings", appearanceHandler.Update)
+
+		r.Post("/query", queryHandler.Run)
+		r.Get("/query/catalog", queryHandler.Catalog)
 
 		r.Get("/ws/jobs/{id}", wsHandler.HandleJobWS)
 	})

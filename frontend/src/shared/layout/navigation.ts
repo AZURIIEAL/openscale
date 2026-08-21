@@ -36,7 +36,12 @@ export const NAV_ENTRIES: NavEntry[] = [
     icon: PipelinesIcon,
     subtitle: 'Bronze through model training, run by hand or on a chain.',
   },
-  { path: '/sql-editor', label: 'SQL Editor', icon: SqlEditorIcon, subtitle: 'Query the lake directly. Coming soon.' },
+  {
+    path: '/sql-editor',
+    label: 'SQL Editor',
+    icon: SqlEditorIcon,
+    subtitle: 'Read-only SQL against Postgres. Lake queries coming later.',
+  },
   {
     path: '/data-catalog',
     label: 'Data Catalog',
