@@ -56,6 +56,7 @@ export function useAppearanceSync() {
       current.themeOverride !== stored.themeOverride ||
       current.visualMode !== stored.visualMode ||
       current.accentId !== stored.accentId ||
+      current.chartStyle !== stored.chartStyle ||
       current.shadowScale !== stored.shadowScale ||
       current.uiScale !== stored.uiScale;
     if (changed) skipNextSaveRef.current = true;
@@ -65,6 +66,7 @@ export function useAppearanceSync() {
   const themeOverride = useThemeStore((s) => s.themeOverride);
   const visualMode = useThemeStore((s) => s.visualMode);
   const accentId = useThemeStore((s) => s.accentId);
+  const chartStyle = useThemeStore((s) => s.chartStyle);
   const shadowScale = useThemeStore((s) => s.shadowScale);
   const uiScale = useThemeStore((s) => s.uiScale);
 
@@ -75,9 +77,9 @@ export function useAppearanceSync() {
       return;
     }
     const timeout = setTimeout(() => {
-      save({ themeOverride, visualMode, accentId, shadowScale, uiScale });
+      save({ themeOverride, visualMode, accentId, chartStyle, shadowScale, uiScale });
     }, 500);
     return () => clearTimeout(timeout);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [themeOverride, visualMode, accentId, shadowScale, uiScale]);
+  }, [themeOverride, visualMode, accentId, chartStyle, shadowScale, uiScale]);
 }

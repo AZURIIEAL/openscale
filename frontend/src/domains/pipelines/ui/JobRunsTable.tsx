@@ -42,13 +42,13 @@ function ClearHistoryButton({ onClear, clearing }: { onClear: () => void; cleari
     <button
       type="button"
       disabled={clearing}
-      className="os-font-mono text-[11px] font-semibold uppercase tracking-[0.06em]"
+      className="text-[13px] font-semibold"
       style={{
         background: 'none',
         border: 'none',
         cursor: clearing ? 'default' : 'pointer',
         padding: 0,
-        color: confirming ? 'var(--crit)' : 'var(--ink-muted)',
+        color: confirming ? 'var(--danger)' : 'var(--text-muted)',
       }}
       onClick={() => {
         if (confirming) {
@@ -75,13 +75,14 @@ export function JobRunsTable({
   clearing,
 }: JobRunsTableProps) {
   return (
-    <div>
-      <div className="mb-2.5 flex flex-wrap items-center justify-between gap-2">
-        <div className="os-font-mono ml-0.5 text-xs font-semibold uppercase tracking-[0.06em]" style={{ color: 'var(--ink-muted)' }}>
-          Run history
+    <Panel>
+      <header className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h3 style={{ margin: 0, fontSize: 18, fontWeight: 700, letterSpacing: '-0.015em', color: 'var(--text-heading)' }}>Run History</h3>
+          <p style={{ margin: '6px 0 0', fontSize: 14, color: 'var(--text-muted)' }}>Page {page + 1}</p>
         </div>
         <div className="flex items-center gap-4">
-          <div className="os-font-mono flex items-center gap-2.5 text-[11px]" style={{ color: 'var(--ink-muted)' }}>
+          <div className="flex items-center gap-2.5 text-[13px]" style={{ color: 'var(--text-muted)' }}>
             <button
               type="button"
               disabled={page === 0}
@@ -93,13 +94,11 @@ export function JobRunsTable({
                 cursor: page === 0 ? 'default' : 'pointer',
                 opacity: page === 0 ? 0.35 : 1,
                 padding: 0,
-                fontSize: '13px',
                 color: 'inherit',
               }}
             >
               ←
             </button>
-            <span>Page {page + 1}</span>
             <button
               type="button"
               disabled={!hasMore}
@@ -111,7 +110,6 @@ export function JobRunsTable({
                 cursor: hasMore ? 'pointer' : 'default',
                 opacity: hasMore ? 1 : 0.35,
                 padding: 0,
-                fontSize: '13px',
                 color: 'inherit',
               }}
             >
@@ -120,17 +118,13 @@ export function JobRunsTable({
           </div>
           <ClearHistoryButton onClear={onClear} clearing={clearing} />
         </div>
-      </div>
-      <Panel className="overflow-x-auto p-1.5">
+      </header>
+      <div className="mt-4 overflow-x-auto">
         <table className="w-full min-w-[800px] border-collapse">
           <thead>
-            <tr>
+            <tr style={{ background: 'var(--surface-sunken)' }}>
               {COLUMNS.map((h) => (
-                <th
-                  key={h}
-                  className="os-font-mono px-3.5 py-2.5 text-left text-[10.5px] font-semibold uppercase tracking-[0.06em]"
-                  style={{ color: 'var(--ink-faint)' }}
-                >
+                <th key={h} className="text-left" style={{ padding: '12px 14px', fontSize: 13, fontWeight: 600, color: 'var(--text-muted)' }}>
                   {h}
                 </th>
               ))}
@@ -139,7 +133,7 @@ export function JobRunsTable({
           <tbody>
             {runs.length === 0 && (
               <tr>
-                <td className="px-3.5 py-3 text-[13px]" style={{ color: 'var(--ink-muted)' }} colSpan={COLUMNS.length}>
+                <td className="px-3.5 py-3 text-[13px]" style={{ color: 'var(--text-muted)' }} colSpan={COLUMNS.length}>
                   No runs yet.
                 </td>
               </tr>
@@ -151,42 +145,42 @@ export function JobRunsTable({
                 aria-selected={run.id === selectedRunId}
                 onClick={onSelect ? () => onSelect(run.id) : undefined}
               >
-                <td className="os-font-mono px-3.5 py-2.5 text-[13px]" style={{ borderTop: '1px solid var(--hairline)' }}>
+                <td className="os-font-mono px-3.5 py-3 text-[13px] font-semibold" style={{ borderTop: '1px solid var(--border-subtle)' }}>
                   {run.jobType}
                 </td>
                 <td
-                  className="os-font-mono os-tabular-nums px-3.5 py-2.5 text-[13px]"
-                  style={{ borderTop: '1px solid var(--hairline)' }}
+                  className="os-font-mono os-tabular-nums px-3.5 py-3 text-[13px]"
+                  style={{ borderTop: '1px solid var(--border-subtle)' }}
                 >
                   {formatRunTime(run.submittedAt)}
                 </td>
                 <td
-                  className="os-font-mono os-tabular-nums px-3.5 py-2.5 text-[13px]"
-                  style={{ borderTop: '1px solid var(--hairline)', color: run.startedAt ? undefined : 'var(--ink-faint)' }}
+                  className="os-font-mono os-tabular-nums px-3.5 py-3 text-[13px]"
+                  style={{ borderTop: '1px solid var(--border-subtle)', color: run.startedAt ? undefined : 'var(--text-subtle)' }}
                 >
                   {formatRunTime(run.startedAt)}
                 </td>
                 <td
-                  className="os-font-mono os-tabular-nums px-3.5 py-2.5 text-[13px]"
+                  className="os-font-mono os-tabular-nums px-3.5 py-3 text-[13px]"
                   style={{
-                    borderTop: '1px solid var(--hairline)',
-                    color: run.finishedAt ? undefined : 'var(--warn)',
+                    borderTop: '1px solid var(--border-subtle)',
+                    color: run.finishedAt ? undefined : 'var(--warning)',
                   }}
                 >
                   {formatEnded(run)}
                 </td>
                 <td
-                  className="os-font-mono os-tabular-nums px-3.5 py-2.5 text-[13px]"
-                  style={{ borderTop: '1px solid var(--hairline)', color: 'var(--ink-muted)' }}
+                  className="os-font-mono os-tabular-nums px-3.5 py-3 text-[13px]"
+                  style={{ borderTop: '1px solid var(--border-subtle)', color: 'var(--text-muted)' }}
                 >
                   {formatRunDuration(run.startedAt, run.finishedAt, run.state)}
                 </td>
-                <td className="px-3.5 py-2.5" style={{ borderTop: '1px solid var(--hairline)' }}>
+                <td className="px-3.5 py-3" style={{ borderTop: '1px solid var(--border-subtle)' }}>
                   <StatusPill status={deriveRunStatus(run.state)}>{stateLabel(run.state)}</StatusPill>
                 </td>
                 <td
-                  className="os-font-mono os-tabular-nums px-3.5 py-2.5 text-[13px]"
-                  style={{ borderTop: '1px solid var(--hairline)', color: 'var(--ink-muted)' }}
+                  className="os-font-mono os-tabular-nums px-3.5 py-3 text-[13px]"
+                  style={{ borderTop: '1px solid var(--border-subtle)', color: 'var(--text-muted)' }}
                 >
                   {formatRunRows(run.rowsProcessed)}
                 </td>
@@ -194,7 +188,7 @@ export function JobRunsTable({
             ))}
           </tbody>
         </table>
-      </Panel>
-    </div>
+      </div>
+    </Panel>
   );
 }

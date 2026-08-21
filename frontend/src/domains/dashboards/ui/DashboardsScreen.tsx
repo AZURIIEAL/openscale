@@ -21,14 +21,14 @@ function sum(values: (number | undefined)[]): number {
 function EtlHealthRow({ health }: { health: JobTypeHealth }) {
   const total = health.succeeded + health.partial + health.failed || 1;
   const segments: { count: number; color: string }[] = [
-    { count: health.succeeded, color: 'var(--good)' },
-    { count: health.partial, color: 'var(--warn)' },
-    { count: health.failed, color: 'var(--crit)' },
+    { count: health.succeeded, color: 'var(--success)' },
+    { count: health.partial, color: 'var(--warning)' },
+    { count: health.failed, color: 'var(--danger)' },
   ];
 
   return (
     <div className="flex items-center gap-3">
-      <span className="os-font-mono w-20 flex-shrink-0 text-[12px]" style={{ color: 'var(--ink)' }}>
+      <span className="os-font-mono w-20 flex-shrink-0 text-[12px]" style={{ color: 'var(--text-body)' }}>
         {health.jobType}
       </span>
       <div className="flex h-3 flex-1 overflow-hidden rounded" style={{ background: 'var(--shadow-lo)' }}>
@@ -36,10 +36,10 @@ function EtlHealthRow({ health }: { health: JobTypeHealth }) {
           seg.count > 0 ? <div key={i} style={{ width: `${(seg.count / total) * 100}%`, background: seg.color }} /> : null,
         )}
       </div>
-      <span className="os-font-mono os-tabular-nums w-24 flex-shrink-0 text-right text-[11px]" style={{ color: 'var(--ink-muted)' }}>
+      <span className="os-font-mono os-tabular-nums w-24 flex-shrink-0 text-right text-[11px]" style={{ color: 'var(--text-muted)' }}>
         {formatDurationSeconds(health.avgDurationSeconds)} avg
       </span>
-      <span className="os-font-mono os-tabular-nums w-28 flex-shrink-0 text-right text-[11px]" style={{ color: 'var(--ink-muted)' }}>
+      <span className="os-font-mono os-tabular-nums w-28 flex-shrink-0 text-right text-[11px]" style={{ color: 'var(--text-muted)' }}>
         {health.succeeded}✓ {health.partial}~ {health.failed}✗
       </span>
     </div>
@@ -51,14 +51,14 @@ export function DashboardsScreen() {
 
   if (isError) {
     return (
-      <div className="text-sm" style={{ color: 'var(--crit)' }}>
+      <div className="text-sm" style={{ color: 'var(--danger)' }}>
         Failed to load dashboards. Is the control-plane running?
       </div>
     );
   }
   if (isLoading || !data) {
     return (
-      <div className="text-sm" style={{ color: 'var(--ink-muted)' }}>
+      <div className="text-sm" style={{ color: 'var(--text-muted)' }}>
         Loading dashboards…
       </div>
     );
@@ -68,7 +68,7 @@ export function DashboardsScreen() {
 
   if (!hasAnyGoldData) {
     return (
-      <Panel className="p-6 text-sm" style={{ color: 'var(--ink-muted)' }}>
+      <Panel className="p-6 text-sm" style={{ color: 'var(--text-muted)' }}>
         No Gold data yet -- run the Silver and Gold pipelines from the Pipelines screen first, then come back here.
       </Panel>
     );
@@ -142,7 +142,7 @@ export function DashboardsScreen() {
         value={latestModelMetric?.r2 !== undefined ? `R² ${latestModelMetric.r2.toFixed(2)}` : undefined}
       >
         {data.modelMetrics.length < 2 ? (
-          <div className="flex flex-col items-center justify-center gap-1 text-center text-[12px]" style={{ height: 120, color: 'var(--ink-faint)' }}>
+          <div className="flex flex-col items-center justify-center gap-1 text-center text-[12px]" style={{ height: 120, color: 'var(--text-subtle)' }}>
             <span>Only one completed train run so far.</span>
             <span>MAE ${latestModelMetric?.mae?.toFixed(2)} · RMSE ${latestModelMetric?.rmse?.toFixed(2)} -- retrain again to see a trend.</span>
           </div>
@@ -156,7 +156,7 @@ export function DashboardsScreen() {
               }))}
               valueFormatter={(v) => `MAE $${v.toFixed(2)}`}
             />
-            <div className="os-font-mono text-[10.5px]" style={{ color: 'var(--ink-muted)' }}>
+            <div className="os-font-mono text-[10.5px]" style={{ color: 'var(--text-muted)' }}>
               Latest: MAE ${latestModelMetric?.mae?.toFixed(2)} · RMSE ${latestModelMetric?.rmse?.toFixed(2)} · R² {latestModelMetric?.r2?.toFixed(3)}
             </div>
           </>
@@ -172,7 +172,7 @@ export function DashboardsScreen() {
 
       <ChartPanel title="ETL pipeline health" className="lg:col-span-2">
         {data.etlHealth.length === 0 ? (
-          <div className="text-[12px]" style={{ color: 'var(--ink-faint)' }}>
+          <div className="text-[12px]" style={{ color: 'var(--text-subtle)' }}>
             No completed runs yet.
           </div>
         ) : (

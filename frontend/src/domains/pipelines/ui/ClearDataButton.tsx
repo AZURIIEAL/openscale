@@ -37,7 +37,7 @@ export function ClearDataButton({ onRunStarted }: ClearDataButtonProps) {
         border: 'none',
         cursor: isPending ? 'default' : 'pointer',
         padding: 0,
-        color: confirming ? 'var(--crit)' : 'var(--ink-muted)',
+        color: confirming ? 'var(--danger)' : 'var(--text-muted)',
       }}
       onClick={() => {
         if (confirming) {

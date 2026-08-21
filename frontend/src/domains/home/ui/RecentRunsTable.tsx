@@ -5,20 +5,17 @@ import type { PipelineRunSummary } from '../domain/entities';
 
 export function RecentRunsTable({ runs }: { runs: PipelineRunSummary[] }) {
   return (
-    <div>
-      <div className="os-font-mono mb-2.5 ml-0.5 text-xs font-semibold uppercase tracking-[0.06em]" style={{ color: 'var(--ink-muted)' }}>
-        Recent runs
-      </div>
-      <Panel className="overflow-x-auto p-1.5">
+    <Panel>
+      <header>
+        <h3 style={{ margin: 0, fontSize: 18, fontWeight: 700, letterSpacing: '-0.015em', color: 'var(--text-heading)' }}>Recent Runs</h3>
+        <p style={{ margin: '6px 0 0', fontSize: 14, color: 'var(--text-muted)' }}>Last five pipeline jobs</p>
+      </header>
+      <div className="mt-4 overflow-x-auto">
         <table className="w-full min-w-[640px] border-collapse">
           <thead>
-            <tr>
+            <tr style={{ background: 'var(--surface-sunken)' }}>
               {['Job', 'Started', 'Duration', 'Status', 'Rows'].map((h) => (
-                <th
-                  key={h}
-                  className="os-font-mono px-3.5 py-2.5 text-left text-[10.5px] font-semibold uppercase tracking-[0.06em]"
-                  style={{ color: 'var(--ink-faint)' }}
-                >
+                <th key={h} className="text-left" style={{ padding: '12px 14px', fontSize: 13, fontWeight: 600, color: 'var(--text-muted)' }}>
                   {h}
                 </th>
               ))}
@@ -27,27 +24,27 @@ export function RecentRunsTable({ runs }: { runs: PipelineRunSummary[] }) {
           <tbody>
             {runs.map((run) => (
               <tr key={run.id}>
-                <td className="os-font-mono px-3.5 py-2.5 text-[13px]" style={{ borderTop: '1px solid var(--hairline)' }}>
+                <td className="os-font-mono px-3.5 py-3 text-[13px] font-semibold" style={{ borderTop: '1px solid var(--border-subtle)' }}>
                   {run.jobName}
                 </td>
                 <td
-                  className="os-font-mono os-tabular-nums px-3.5 py-2.5 text-[13px]"
-                  style={{ borderTop: '1px solid var(--hairline)' }}
+                  className="os-font-mono os-tabular-nums px-3.5 py-3 text-[13px]"
+                  style={{ borderTop: '1px solid var(--border-subtle)' }}
                 >
                   {run.startedAt}
                 </td>
                 <td
-                  className="os-font-mono os-tabular-nums px-3.5 py-2.5 text-[13px]"
-                  style={{ borderTop: '1px solid var(--hairline)' }}
+                  className="os-font-mono os-tabular-nums px-3.5 py-3 text-[13px]"
+                  style={{ borderTop: '1px solid var(--border-subtle)' }}
                 >
                   {run.durationLabel}
                 </td>
-                <td className="px-3.5 py-2.5" style={{ borderTop: '1px solid var(--hairline)' }}>
+                <td className="px-3.5 py-3" style={{ borderTop: '1px solid var(--border-subtle)' }}>
                   <StatusPill status={run.status}>{run.status === 'good' ? 'success' : 'partial'}</StatusPill>
                 </td>
                 <td
-                  className="os-font-mono os-tabular-nums px-3.5 py-2.5 text-[13px]"
-                  style={{ borderTop: '1px solid var(--hairline)', color: 'var(--ink-muted)' }}
+                  className="os-font-mono os-tabular-nums px-3.5 py-3 text-[13px]"
+                  style={{ borderTop: '1px solid var(--border-subtle)', color: 'var(--text-muted)' }}
                 >
                   {formatRunRows(run.rowsProcessed)}
                 </td>
@@ -55,7 +52,7 @@ export function RecentRunsTable({ runs }: { runs: PipelineRunSummary[] }) {
             ))}
           </tbody>
         </table>
-      </Panel>
-    </div>
+      </div>
+    </Panel>
   );
 }

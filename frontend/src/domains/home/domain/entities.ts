@@ -6,6 +6,12 @@ export interface ResourceGauge {
   id: string;
   label: string;
   sublabel: string;
+  /** The used/total split of `sublabel` (e.g. "3.4 GB" / "15.5 GB") -- kept
+   * apart from the combined string so the Connections chart-style picker's
+   * meter treatments (capsule, ledger, ...) can show each half on its own,
+   * without re-parsing `sublabel`'s "X / Y unit" text. */
+  usedLabel: string;
+  totalLabel: string;
   valuePercent: number;
   color: GaugeColor;
 }

@@ -10,21 +10,22 @@ interface ChartPanelProps {
 }
 
 /** Shared tile shell for every Dashboards chart -- title + optional
- * headline value on the right (mirrors GaugeRow's revenue-trend panel). */
+ * headline value beneath it (mirrors the artifact's chart-panel Cards). */
 export function ChartPanel({ title, value, valueColor, children, className }: ChartPanelProps) {
   return (
-    <Panel className={`flex flex-col gap-2.5 px-5 py-[18px] ${className ?? ''}`}>
-      <div className="flex items-baseline justify-between gap-2">
-        <span className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--ink-muted)' }}>
-          {title}
-        </span>
-        {value && (
-          <span className="os-font-display os-tabular-nums text-[18px]" style={valueColor ? { color: valueColor } : undefined}>
-            {value}
-          </span>
-        )}
-      </div>
-      {children}
+    <Panel className={className}>
+      <header>
+        <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, letterSpacing: '-0.01em', color: 'var(--text-heading)' }}>{title}</h3>
+      </header>
+      {value && (
+        <div
+          className="os-tabular-nums"
+          style={{ margin: '10px 0 14px', fontSize: 28, fontWeight: 700, letterSpacing: '-0.02em', color: valueColor ?? 'var(--text-heading)' }}
+        >
+          {value}
+        </div>
+      )}
+      <div className={value ? '' : 'mt-4'}>{children}</div>
     </Panel>
   );
 }

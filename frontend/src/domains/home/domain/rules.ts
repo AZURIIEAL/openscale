@@ -23,18 +23,23 @@ function colorForPercent(percent: number): GaugeColor {
  * container on the host.
  */
 export function toLiveGauges(totals: ResourceTotals): ResourceGauge[] {
+  const coresBusy = ((totals.cpuPercent / 100) * totals.numCpu).toFixed(1);
   return [
     {
       id: 'container-memory',
       label: 'Container Memory',
       sublabel: `${formatGiB(totals.memUsedBytes)} / ${formatGiB(totals.memTotalBytes)} GB`,
+      usedLabel: `${formatGiB(totals.memUsedBytes)} GB`,
+      totalLabel: `${formatGiB(totals.memTotalBytes)} GB`,
       valuePercent: totals.memPercent,
       color: colorForPercent(totals.memPercent),
     },
     {
       id: 'container-cpu',
       label: 'Container CPU',
-      sublabel: totals.numCpu > 0 ? `${((totals.cpuPercent / 100) * totals.numCpu).toFixed(1)} / ${totals.numCpu} cores` : '—',
+      sublabel: totals.numCpu > 0 ? `${coresBusy} / ${totals.numCpu} cores` : '—',
+      usedLabel: totals.numCpu > 0 ? `${coresBusy} cores` : '—',
+      totalLabel: totals.numCpu > 0 ? `${totals.numCpu} cores` : '—',
       valuePercent: totals.cpuPercent,
       color: colorForPercent(totals.cpuPercent),
     },

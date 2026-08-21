@@ -17,8 +17,8 @@ export function ChartTooltip({ leftPct, topPct, label, value }: ChartTooltipProp
         left: `${leftPct}%`,
         top: `${topPct}%`,
         transform: 'translate(-50%, calc(-100% - 8px))',
-        background: 'var(--ink)',
-        color: 'var(--bg)',
+        background: 'var(--surface-inverse)',
+        color: 'var(--text-on-inverse)',
       }}
     >
       <div style={{ opacity: 0.75 }}>{label}</div>

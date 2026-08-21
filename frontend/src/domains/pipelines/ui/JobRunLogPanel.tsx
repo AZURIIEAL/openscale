@@ -14,7 +14,7 @@ export function JobRunLogPanel({ jobId }: { jobId: string }) {
       <div className="flex items-center justify-between">
         <span
           className="os-font-mono flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.06em]"
-          style={{ color: 'var(--ink-muted)' }}
+          style={{ color: 'var(--text-muted)' }}
         >
           {isLive && <Spinner />}
           {isLive ? 'Live run' : 'Run log'}
@@ -23,12 +23,12 @@ export function JobRunLogPanel({ jobId }: { jobId: string }) {
       </div>
       <Well className="max-h-[220px] overflow-y-auto p-3">
         {logLines.length === 0 ? (
-          <span className="os-font-mono text-[12px]" style={{ color: 'var(--ink-faint)' }}>
+          <span className="os-font-mono text-[12px]" style={{ color: 'var(--text-subtle)' }}>
             Waiting for output…
           </span>
         ) : (
           logLines.map((line, i) => (
-            <div key={i} className="os-font-mono text-[11.5px]" style={{ color: 'var(--ink-muted)' }}>
+            <div key={i} className="os-font-mono text-[11.5px]" style={{ color: 'var(--text-muted)' }}>
               {line}
             </div>
           ))

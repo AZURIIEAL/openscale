@@ -26,7 +26,7 @@ const YEARS = Array.from({ length: CURRENT_YEAR - EARLIEST_YEAR + 1 }, (_, i) =>
 const selectStyle = {
   background: 'transparent',
   border: 'none',
-  color: 'var(--ink)',
+  color: 'var(--text-body)',
   outline: 'none',
 } as const;
 
@@ -53,7 +53,7 @@ function MonthYearField({
 
   return (
     <label className="flex flex-col gap-1">
-      <span className="os-font-mono text-[10.5px] uppercase tracking-[0.06em]" style={{ color: 'var(--ink-faint)' }}>
+      <span className="os-font-mono text-[10.5px] uppercase tracking-[0.06em]" style={{ color: 'var(--text-subtle)' }}>
         {label}
       </span>
       <div className="flex gap-1.5">
@@ -142,7 +142,7 @@ export function RunJobForm({ fields, pending, onSubmit, submitLabel = 'Start run
         {pending ? 'Starting…' : submitLabel}
       </RunButton>
       {rangeError && (
-        <span className="os-font-mono text-[11.5px]" style={{ color: 'var(--crit)' }}>
+        <span className="os-font-mono text-[11.5px]" style={{ color: 'var(--danger)' }}>
           {rangeError}
         </span>
       )}

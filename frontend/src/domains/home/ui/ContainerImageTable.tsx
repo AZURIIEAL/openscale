@@ -10,19 +10,20 @@ export function ContainerImageTable({ containers }: { containers: ContainerResou
   const sorted = [...containers].sort((a, b) => b.memUsageBytes - a.memUsageBytes);
 
   return (
-    <div>
-      <div className="os-font-mono mb-2.5 ml-0.5 text-xs font-semibold uppercase tracking-[0.06em]" style={{ color: 'var(--ink-muted)' }}>
-        Per-image usage — live
-      </div>
-      <Panel className="overflow-x-auto p-1.5">
+    <Panel>
+      <header>
+        <h3 style={{ margin: 0, fontSize: 18, fontWeight: 700, letterSpacing: '-0.015em', color: 'var(--text-heading)' }}>Per-Image Usage</h3>
+        <p style={{ margin: '6px 0 0', fontSize: 14, color: 'var(--text-muted)' }}>Live container consumption</p>
+      </header>
+      <div className="mt-4 overflow-x-auto">
         <table className="w-full min-w-[520px] border-collapse">
           <thead>
-            <tr>
+            <tr style={{ background: 'var(--surface-sunken)' }}>
               {['Image', 'Container', 'CPU', 'Memory'].map((h) => (
                 <th
                   key={h}
-                  className="os-font-mono px-3.5 py-2.5 text-left text-[10.5px] font-semibold uppercase tracking-[0.06em]"
-                  style={{ color: 'var(--ink-faint)' }}
+                  className="text-left"
+                  style={{ padding: '12px 14px', fontSize: 13, fontWeight: 600, color: 'var(--text-muted)' }}
                 >
                   {h}
                 </th>
@@ -32,35 +33,35 @@ export function ContainerImageTable({ containers }: { containers: ContainerResou
           <tbody>
             {sorted.length === 0 ? (
               <tr>
-                <td className="os-font-mono px-3.5 py-3 text-[13px]" style={{ color: 'var(--ink-muted)' }} colSpan={4}>
+                <td className="px-3.5 py-3 text-[13px]" style={{ color: 'var(--text-muted)' }} colSpan={4}>
                   No running containers found.
                 </td>
               </tr>
             ) : (
               sorted.map((c) => (
                 <tr key={c.id}>
-                  <td className="os-font-mono px-3.5 py-2.5 text-[13px]" style={{ borderTop: '1px solid var(--hairline)' }}>
+                  <td className="os-font-mono px-3.5 py-3 text-[13px]" style={{ borderTop: '1px solid var(--border-subtle)' }}>
                     {c.image}
                   </td>
                   <td
-                    className="os-font-mono px-3.5 py-2.5 text-[13px]"
-                    style={{ borderTop: '1px solid var(--hairline)', color: 'var(--ink-muted)' }}
+                    className="os-font-mono px-3.5 py-3 text-[13px]"
+                    style={{ borderTop: '1px solid var(--border-subtle)', color: 'var(--text-muted)' }}
                   >
                     {c.name}
                   </td>
                   <td
-                    className="os-font-mono os-tabular-nums px-3.5 py-2.5 text-[13px]"
-                    style={{ borderTop: '1px solid var(--hairline)' }}
+                    className="os-font-mono os-tabular-nums px-3.5 py-3 text-[13px]"
+                    style={{ borderTop: '1px solid var(--border-subtle)' }}
                   >
                     {c.cpuPercent.toFixed(1)}%
                   </td>
                   <td
-                    className="os-font-mono os-tabular-nums px-3.5 py-2.5 text-[13px]"
-                    style={{ borderTop: '1px solid var(--hairline)' }}
+                    className="os-font-mono os-tabular-nums px-3.5 py-3 text-[13px]"
+                    style={{ borderTop: '1px solid var(--border-subtle)' }}
                   >
                     {formatMiB(c.memUsageBytes)} MB
                     {c.memLimitBytes > 0 ? (
-                      <span style={{ color: 'var(--ink-faint)' }}> / {formatGiB(c.memLimitBytes)} GB</span>
+                      <span style={{ color: 'var(--text-subtle)' }}> / {formatGiB(c.memLimitBytes)} GB</span>
                     ) : null}
                   </td>
                 </tr>
@@ -68,7 +69,7 @@ export function ContainerImageTable({ containers }: { containers: ContainerResou
             )}
           </tbody>
         </table>
-      </Panel>
-    </div>
+      </div>
+    </Panel>
   );
 }

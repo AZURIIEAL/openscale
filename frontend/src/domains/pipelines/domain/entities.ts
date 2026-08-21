@@ -24,6 +24,9 @@ export interface JobParamField {
 export interface JobDefinition {
   type: string;
   label: string;
+  /** The pipeline layer this job writes to (Bronze/Silver/Gold/Features/Model) --
+   * shown as a small badge next to the label. */
+  stage: string;
   description: string;
   /** Present only for job types that need user-supplied parameters before
    * running (currently just ingest's date range). Absent means the job
@@ -43,6 +46,7 @@ export const JOB_CATALOG: JobDefinition[] = [
   {
     type: 'ingest',
     label: 'Ingest (Bronze)',
+    stage: 'Bronze',
     description: 'Download/validate TLC parquet for a month range, write to Bronze in MinIO.',
     paramFields: [
       { name: 'start', label: 'Start (YYYY-MM)', placeholder: '2024-07' },
@@ -52,21 +56,25 @@ export const JOB_CATALOG: JobDefinition[] = [
   {
     type: 'silver',
     label: 'Validate (Silver)',
+    stage: 'Silver',
     description: 'Bronze -> Silver: reject/quarantine/flag invalid rows, write clean trips.',
   },
   {
     type: 'gold',
     label: 'Aggregate (Gold)',
+    stage: 'Gold',
     description: 'Silver -> Gold: daily revenue, hourly demand, zone stats, congestion metrics.',
   },
   {
     type: 'features',
     label: 'Compute Features',
+    stage: 'Features',
     description: 'Silver -> zone x hour features, written to Postgres and Redis.',
   },
   {
     type: 'train',
     label: 'Train Fare Model',
+    stage: 'Model',
     description: 'Samples Silver trips, trains a fare-prediction model, logs it to MLflow.',
   },
 ];

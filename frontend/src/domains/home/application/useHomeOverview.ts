@@ -47,9 +47,16 @@ function toRevenueTrend(stats: ApiHomeStats, fallback: RevenueTrend): RevenueTre
   if (values.length < 2) return fallback;
 
   const total = values.reduce((sum, v) => sum + v, 0);
-  const first = values[0];
-  const last = values[values.length - 1];
-  const changePct = first !== 0 ? ((last - first) / first) * 100 : 0;
+
+  // "than last period" compares this window's second half against its
+  // first half (e.g. the most recent 7 days vs. the 7 before that), not
+  // the single first/last day -- comparing two individual days made the
+  // figure swing wildly (or read a false -100%) whenever the very latest
+  // day's Gold aggregation hadn't finished yet and still read as $0.
+  const mid = Math.floor(values.length / 2);
+  const firstHalf = values.slice(0, mid).reduce((sum, v) => sum + v, 0);
+  const secondHalf = values.slice(mid).reduce((sum, v) => sum + v, 0);
+  const changePct = firstHalf !== 0 ? ((secondHalf - firstHalf) / firstHalf) * 100 : 0;
 
   return {
     values,

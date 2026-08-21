@@ -13,8 +13,8 @@ export function ServiceConsoleAffordance({ service }: { service: ServiceHealth }
   if (!service.consoleUrl) return null;
 
   if (service.status === 'crit') {
-    return <BrokenHeartIcon className="text-[var(--crit)]" />;
+    return <BrokenHeartIcon className="text-[var(--danger)]" />;
   }
 
-  return <LinkIcon className="text-[var(--ink-faint)] transition-colors group-hover:text-[var(--accent)]" />;
+  return <LinkIcon className="text-[var(--text-subtle)] transition-colors group-hover:text-[var(--brand)]" />;
 }

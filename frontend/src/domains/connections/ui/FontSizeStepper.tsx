@@ -1,8 +1,8 @@
 import { IconButton } from '@/shared/design-system/IconButton';
 
-const MIN = 0.85;
-const MAX = 1.3;
-const STEP = 0.05;
+const MIN = 0.8;
+const MAX = 1.4;
+const STEP = 0.1;
 
 interface FontSizeStepperProps {
   value: number;

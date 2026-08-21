@@ -7,7 +7,7 @@ interface ZoomControlsProps {
  * factor + point count, and a reset back to the full series. */
 export function ZoomControls({ zoomLabel, onReset }: ZoomControlsProps) {
   return (
-    <div className="os-font-mono mb-1.5 flex items-center justify-between text-[10px]" style={{ color: 'var(--accent)' }}>
+    <div className="os-font-mono mb-1.5 flex items-center justify-between text-[10px]" style={{ color: 'var(--brand)' }}>
       <span>{zoomLabel}</span>
       <button
         type="button"

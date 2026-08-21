@@ -8,8 +8,6 @@ interface AppShellProps {
   servicesUp: number;
   servicesTotal: number;
   systemStatus: Status;
-  isDark: boolean;
-  onToggleDark: (checked: boolean) => void;
 }
 
 /**
@@ -20,28 +18,28 @@ interface AppShellProps {
  * The one bit of local state (mobile nav open/closed) is pure UI, not data,
  * so it stays here rather than being threaded through the container.
  */
-export function AppShell({ servicesUp, servicesTotal, systemStatus, isDark, onToggleDark }: AppShellProps) {
+export function AppShell({ servicesUp, servicesTotal, systemStatus }: AppShellProps) {
   const [navOpen, setNavOpen] = useState(false);
 
   return (
-    <div className="flex min-h-screen">
-      <Sidebar
-        servicesUp={servicesUp}
-        servicesTotal={servicesTotal}
-        overallStatus={systemStatus}
-        isOpen={navOpen}
-        onClose={() => setNavOpen(false)}
-      />
-      <main className="min-w-0 flex-1 px-4 pb-8 pt-4 sm:px-[28px] sm:pb-[40px] sm:pt-[22px]">
-        <TopBar
-          systemStatus={systemStatus}
-          systemStatusLabel={`${servicesUp} of ${servicesTotal} services healthy`}
-          isDark={isDark}
-          onToggleDark={onToggleDark}
-          onOpenMenu={() => setNavOpen(true)}
+    <div className="min-h-screen" style={{ background: 'var(--canvas)' }}>
+      <div className="flex min-h-screen">
+        <Sidebar
+          servicesUp={servicesUp}
+          servicesTotal={servicesTotal}
+          overallStatus={systemStatus}
+          isOpen={navOpen}
+          onClose={() => setNavOpen(false)}
         />
-        <Outlet />
-      </main>
+        <main className="min-w-0 flex-1 px-4 pb-8 pt-4 sm:px-[28px] sm:pb-[40px] sm:pt-[22px]">
+          <TopBar
+            systemStatus={systemStatus}
+            systemStatusLabel={`${servicesUp} of ${servicesTotal} services healthy`}
+            onOpenMenu={() => setNavOpen(true)}
+          />
+          <Outlet />
+        </main>
+      </div>
     </div>
   );
 }

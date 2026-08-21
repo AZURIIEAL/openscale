@@ -20,11 +20,11 @@ export function ShadowDepthSlider({ value, onChange }: ShadowDepthSliderProps) {
         step={STEP}
         value={value}
         onChange={(e) => onChange(Number(e.target.value))}
-        style={{ accentColor: 'var(--accent)' }}
+        style={{ accentColor: 'var(--brand)' }}
         className="h-1.5 w-full cursor-pointer"
         aria-label="Shadow depth"
       />
-      <span className="os-font-mono os-tabular-nums w-9 text-right text-[11.5px]" style={{ color: 'var(--ink-muted)' }}>
+      <span className="os-font-mono os-tabular-nums w-9 text-right text-[11.5px]" style={{ color: 'var(--text-muted)' }}>
         {Math.round(value * 100)}%
       </span>
     </div>

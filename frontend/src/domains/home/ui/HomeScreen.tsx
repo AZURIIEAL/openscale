@@ -19,21 +19,21 @@ export function HomeScreen() {
   // whole overview (revenue trend, stats, recent runs) that often.
   const { data: liveStats } = useContainerStats();
 
+  if (isLoading || !data) {
+    return (
+      <div className="text-sm" style={{ color: 'var(--text-muted)' }}>
+        Loading overview…
+      </div>
+    );
+  }
+
   return (
-    <div>
+    <div className="flex flex-col gap-5">
+      <StatsRow stats={data.stats} />
+      <GaugeRow gauges={liveStats ? toLiveGauges(liveStats.totals) : data.gauges} revenueTrend={data.revenueTrend} />
       <HealthStrip />
-      {isLoading || !data ? (
-        <div className="text-sm" style={{ color: 'var(--ink-muted)' }}>
-          Loading overview…
-        </div>
-      ) : (
-        <>
-          <GaugeRow gauges={liveStats ? toLiveGauges(liveStats.totals) : data.gauges} revenueTrend={data.revenueTrend} />
-          <StatsRow stats={data.stats} />
-          {liveStats ? <div className="mb-4"><ContainerImageTable containers={liveStats.containers} /></div> : null}
-          <RecentRunsTable runs={data.recentRuns} />
-        </>
-      )}
+      {liveStats ? <ContainerImageTable containers={liveStats.containers} /> : null}
+      <RecentRunsTable runs={data.recentRuns} />
     </div>
   );
 }

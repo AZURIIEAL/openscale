@@ -2,33 +2,60 @@
  * Self-hosted fonts -- no external CDN dependency at runtime, consistent
  * with the project's laptop-first, offline-friendly stance. Files live in
  * src/assets/fonts and are bundled/hashed by Vite like any other asset.
+ *
+ * Both families ship as a single variable-font (latin subset) file with a
+ * `wght` axis; each block below declares one static weight against that
+ * same file (the browser resolves the axis per CSS Fonts Module Level 4)
+ * rather than shipping one file per weight. This mirrors how Google Fonts'
+ * own CSS delivers these two families.
  */
 
 @font-face {
-  font-family: 'Big Shoulders';
-  font-weight: 800;
-  font-style: normal;
-  font-display: swap;
-  src: url('../../assets/fonts/bigshoulders-800.woff2') format('woff2');
-}
-@font-face {
-  font-family: 'Plex Sans';
+  font-family: 'Plus Jakarta Sans';
   font-weight: 400;
   font-style: normal;
   font-display: swap;
-  src: url('../../assets/fonts/plexsans-400.woff2') format('woff2');
+  src: url('../../assets/fonts/plusjakartasans-var.woff2') format('woff2');
 }
 @font-face {
-  font-family: 'Plex Sans';
-  font-weight: 600;
-  font-style: normal;
-  font-display: swap;
-  src: url('../../assets/fonts/plexsans-600.woff2') format('woff2');
-}
-@font-face {
-  font-family: 'Plex Mono';
+  font-family: 'Plus Jakarta Sans';
   font-weight: 500;
   font-style: normal;
   font-display: swap;
-  src: url('../../assets/fonts/plexmono-500.woff2') format('woff2');
+  src: url('../../assets/fonts/plusjakartasans-var.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Plus Jakarta Sans';
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+  src: url('../../assets/fonts/plusjakartasans-var.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Plus Jakarta Sans';
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+  src: url('../../assets/fonts/plusjakartasans-var.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Plus Jakarta Sans';
+  font-weight: 800;
+  font-style: normal;
+  font-display: swap;
+  src: url('../../assets/fonts/plusjakartasans-var.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  src: url('../../assets/fonts/jetbrainsmono-var.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+  src: url('../../assets/fonts/jetbrainsmono-var.woff2') format('woff2');
 }

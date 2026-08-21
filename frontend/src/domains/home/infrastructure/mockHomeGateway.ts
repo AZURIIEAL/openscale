@@ -9,8 +9,8 @@ import type { HomeOverview } from '../domain/entities';
  */
 const MOCK_OVERVIEW: HomeOverview = {
   gauges: [
-    { id: 'driver-memory', label: 'Driver Memory', sublabel: '5.2 / 8 GB', valuePercent: 65, color: 'accent' },
-    { id: 'shuffle-load', label: 'Shuffle Load', sublabel: '7 / 8 parts', valuePercent: 35, color: 'warn' },
+    { id: 'driver-memory', label: 'Driver Memory', sublabel: '5.2 / 8 GB', usedLabel: '5.2 GB', totalLabel: '8 GB', valuePercent: 65, color: 'accent' },
+    { id: 'shuffle-load', label: 'Shuffle Load', sublabel: '7 / 8 parts', usedLabel: '7 parts', totalLabel: '8 parts', valuePercent: 35, color: 'warn' },
   ],
   revenueTrend: {
     // Daily revenue, oldest (14d ago) first, in $K -- same upward shape as
