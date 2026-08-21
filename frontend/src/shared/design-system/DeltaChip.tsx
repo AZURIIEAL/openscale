@@ -8,16 +8,15 @@ interface DeltaChipProps {
 }
 
 /** Small trend pill (+/- value with an arrow) used inside StatCard and next
- * to chart totals. `onBrand` swaps the palette for use on a solid --brand
- * background (StatCard's `tone="brand"` variant). */
+ * to chart totals. The pill keeps its real up/down color (green/red) even
+ * `onBrand` (StatCard's `tone="brand"` variant, a solid --brand card) --
+ * it has its own opaque tinted background, so it reads fine regardless of
+ * what's behind it. `onBrand` only affects the caption, which sits
+ * directly on the brand background with no pill of its own. */
 export function DeltaChip({ value, direction = 'up', caption, onBrand = false }: DeltaChipProps) {
   const positive = direction === 'up';
   const Arrow = positive ? ArrowUp : ArrowDown;
-  const palette = onBrand
-    ? { bg: 'rgba(255,255,255,.22)', fg: '#FFFFFF' }
-    : positive
-      ? { bg: 'var(--success-tint)', fg: 'var(--success)' }
-      : { bg: 'var(--danger-tint)', fg: 'var(--danger)' };
+  const palette = positive ? { bg: 'var(--success-tint)', fg: 'var(--success)' } : { bg: 'var(--danger-tint)', fg: 'var(--danger)' };
 
   return (
     <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>

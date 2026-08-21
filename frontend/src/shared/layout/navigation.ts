@@ -66,7 +66,7 @@ export const NAV_ENTRIES: NavEntry[] = [
   },
   {
     path: '/connections',
-    label: 'Connections',
+    label: 'Settings',
     icon: ConnectionsIcon,
     subtitle: 'Console appearance and interface preferences.',
     group: 'system',

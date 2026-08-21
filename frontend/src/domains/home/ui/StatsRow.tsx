@@ -10,6 +10,12 @@ const STAT_ICON: Record<string, LucideIcon> = {
   'fare-mae': FileText,
 };
 
+/** The mockup's headline card (Silver Rows Processed) gets the solid-brand
+ * treatment -- pure visual emphasis for the row's primary metric, not a
+ * claim about the data, so it stays even though the delta pill next to it
+ * doesn't (see below). */
+const BRAND_STAT_ID = 'silver-rows';
+
 /** The real HomeStat entity carries a label/value pair only -- no delta,
  * since the control-plane doesn't compute a period-over-period comparison
  * for these four figures. StatCard's delta pill is simply omitted here
@@ -18,7 +24,13 @@ export function StatsRow({ stats }: { stats: HomeStat[] }) {
   return (
     <div className="grid gap-5" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))' }}>
       {stats.map((stat) => (
-        <StatCard key={stat.id} label={titleCase(stat.label)} value={stat.value} icon={STAT_ICON[stat.id]} />
+        <StatCard
+          key={stat.id}
+          label={titleCase(stat.label)}
+          value={stat.value}
+          icon={STAT_ICON[stat.id]}
+          tone={stat.id === BRAND_STAT_ID ? 'brand' : 'surface'}
+        />
       ))}
     </div>
   );
