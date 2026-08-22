@@ -11,6 +11,7 @@ import (
 
 	"github.com/AZURIIEAL/openscale/control-plane/internal/db"
 	"github.com/AZURIIEAL/openscale/control-plane/internal/docker"
+	"github.com/AZURIIEAL/openscale/control-plane/internal/lake"
 	"github.com/AZURIIEAL/openscale/control-plane/internal/redis"
 	"github.com/AZURIIEAL/openscale/control-plane/internal/streaming"
 	"github.com/AZURIIEAL/openscale/control-plane/internal/ws"
@@ -24,6 +25,7 @@ func NewRouter(
 	wsHandler *ws.Handler,
 	streamingClient *streaming.Client,
 	streamHub *streaming.StreamHub,
+	lakeClient *lake.Client,
 	frontendOrigin string,
 ) http.Handler {
 	r := chi.NewRouter()
@@ -52,6 +54,7 @@ func NewRouter(
 	appearanceHandler := NewAppearanceHandler(database)
 	queryHandler := NewQueryHandler(database)
 	streamingHandler := NewStreamingHandler(streamingClient, streamHub, frontendOrigin)
+	lakeHandler := NewLakeHandler(lakeClient)
 	r.Route("/api", func(r chi.Router) {
 		r.Get("/system-health", healthHandler.ServeHTTP)
 		r.Post("/services/{id}/start", actionHandler.Start)
@@ -76,6 +79,8 @@ func NewRouter(
 
 		r.Get("/streaming/topics", streamingHandler.Topics)
 		r.Get("/streaming/ws", streamingHandler.WS)
+
+		r.Get("/catalog/lake", lakeHandler.List)
 
 		r.Get("/ws/jobs/{id}", wsHandler.HandleJobWS)
 	})

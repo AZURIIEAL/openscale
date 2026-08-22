@@ -46,7 +46,7 @@ export const NAV_ENTRIES: NavEntry[] = [
     path: '/data-catalog',
     label: 'Data Catalog',
     icon: DataCatalogIcon,
-    subtitle: 'Browse tables, schemas and lineage. Coming soon.',
+    subtitle: 'Postgres schema, the MinIO lake, and real pipeline lineage.',
   },
   { path: '/notebooks', label: 'Notebooks', icon: NotebooksIcon, subtitle: 'Jupyter, wired to the lake. Coming soon.' },
   {

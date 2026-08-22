@@ -18,6 +18,7 @@ import (
 	"github.com/AZURIIEAL/openscale/control-plane/internal/config"
 	"github.com/AZURIIEAL/openscale/control-plane/internal/db"
 	"github.com/AZURIIEAL/openscale/control-plane/internal/docker"
+	"github.com/AZURIIEAL/openscale/control-plane/internal/lake"
 	"github.com/AZURIIEAL/openscale/control-plane/internal/redis"
 	"github.com/AZURIIEAL/openscale/control-plane/internal/streaming"
 	"github.com/AZURIIEAL/openscale/control-plane/internal/ws"
@@ -69,7 +70,12 @@ func main() {
 	streamConsumer := streaming.NewConsumer(cfg.KafkaBroker, streamHub, logger)
 	go streamConsumer.Run(ctx)
 
-	router := api.NewRouter(watcher, database, redisClient, wsHandler, streamingClient, streamHub, cfg.FrontendOrigin)
+	lakeClient, err := lake.NewClient(cfg.MinioEndpoint, cfg.MinioAccessKey, cfg.MinioSecretKey)
+	if err != nil {
+		logger.Fatal().Err(err).Msg("failed to build MinIO client")
+	}
+
+	router := api.NewRouter(watcher, database, redisClient, wsHandler, streamingClient, streamHub, lakeClient, cfg.FrontendOrigin)
 
 	srv := &http.Server{
 		Addr:              ":" + cfg.Port,

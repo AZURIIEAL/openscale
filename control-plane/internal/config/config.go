@@ -33,6 +33,17 @@ type Config struct {
 	// docker-compose.yml's kafka service for why the two are separate
 	// listeners rather than one.
 	KafkaBroker string `env:"KAFKA_BROKER" envDefault:"localhost:29092"`
+
+	// MinioEndpoint/AccessKey/SecretKey follow the same host-dev-vs-compose
+	// default split as PostgresDSN/KafkaBroker above; docker-compose
+	// overrides MinioEndpoint to "http://minio:9000" for the control-plane
+	// service (the worker service already sets this same value). The
+	// access/secret key defaults match worker/spark/common/storage.py's
+	// hardcoded dev-only credentials -- same bucket, same server, no compose
+	// override needed since the hardcoded defaults already agree everywhere.
+	MinioEndpoint  string `env:"MINIO_ENDPOINT" envDefault:"http://localhost:9000"`
+	MinioAccessKey string `env:"MINIO_ACCESS_KEY" envDefault:"minioadmin"`
+	MinioSecretKey string `env:"MINIO_SECRET_KEY" envDefault:"minioadmin"`
 }
 
 // Load reads Config from the process environment, applying defaults for
