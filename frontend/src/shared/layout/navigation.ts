@@ -55,7 +55,12 @@ export const NAV_ENTRIES: NavEntry[] = [
     icon: MlWorkbenchIcon,
     subtitle: 'Train and evaluate models. Coming soon.',
   },
-  { path: '/streaming', label: 'Streaming', icon: StreamingIcon, subtitle: 'Live Kafka topics and consumers. Coming soon.' },
+  {
+    path: '/streaming',
+    label: 'Streaming',
+    icon: StreamingIcon,
+    subtitle: 'Kafka replay of real Silver trips, streamed live over WebSocket.',
+  },
   {
     path: '/dashboards',
     label: 'Dashboards',

@@ -24,6 +24,15 @@ type Config struct {
 	// to container names for the control-plane service itself.
 	PostgresDSN string `env:"POSTGRES_DSN" envDefault:"postgres://openscale:openscale@localhost:5432/openscale?sslmode=disable"`
 	RedisAddr   string `env:"REDIS_ADDR" envDefault:"localhost:6379"`
+
+	// KafkaBroker follows the same host-run-vs-compose default split as
+	// PostgresDSN/RedisAddr above; docker-compose overrides it to
+	// "kafka:9092" (the in-network PLAINTEXT listener) for both the
+	// control-plane and worker services. The host-dev default targets
+	// Kafka's EXTERNAL listener (29092, not the in-network 9092) -- see
+	// docker-compose.yml's kafka service for why the two are separate
+	// listeners rather than one.
+	KafkaBroker string `env:"KAFKA_BROKER" envDefault:"localhost:29092"`
 }
 
 // Load reads Config from the process environment, applying defaults for

@@ -63,6 +63,12 @@ var Catalog = []Definition{
 	{Type: "gold", Label: "Aggregate (Gold)", Description: "Silver -> Gold: daily revenue, hourly demand, zone stats, congestion metrics"},
 	{Type: "features", Label: "Compute Features", Description: "Silver -> zone x hour features, written to Postgres and Redis"},
 	{Type: "train", Label: "Train Fare Model", Description: "Samples Silver trips, trains a fare-prediction model, logs it to MLflow"},
+	// "replay" is deliberately excluded from the frontend's own JOB_CATALOG
+	// mirror too, same reason as "reset" below: it isn't a normal pipeline
+	// stage (it doesn't write Bronze/Silver/Gold), it's only reachable
+	// through the Streaming screen's own replay control, which calls
+	// POST /api/jobs/replay/run directly.
+	{Type: "replay", Label: "Replay Trips", Description: "Replays real Silver trips onto Kafka's yellow-taxi-trips topic, at a configurable rate"},
 	// "reset" is deliberately excluded from the frontend's own JOB_CATALOG
 	// mirror (frontend/src/domains/pipelines/domain/entities.ts) so it never
 	// shows up as a normal pipeline stage -- it's only reachable through the

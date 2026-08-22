@@ -9,3 +9,4 @@ pyspark==4.2.0
 mlflow==3.15.1
 scikit-learn==1.9.0
 skops==0.14.0
+kafka-python

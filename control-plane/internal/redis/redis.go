@@ -9,6 +9,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"time"
 
 	goredis "github.com/redis/go-redis/v9"
 )
@@ -16,6 +17,12 @@ import (
 const (
 	requestsStream = "openscale:jobs:requests"
 	eventsChannel  = "openscale:jobs:events"
+
+	// controlKeyTTL is a safety net so a control hash for a job nobody ever
+	// reads (finished before the worker deletes its own key, or a
+	// stray/late command against a job id that never existed) doesn't
+	// linger in Redis forever.
+	controlKeyTTL = time.Hour
 )
 
 // JobRequest is enqueued onto the dispatch stream for a worker to pick up.
@@ -72,6 +79,27 @@ func (c *Client) PublishJobEvent(ctx context.Context, event JobEvent) error {
 		return fmt.Errorf("redis: marshal job event: %w", err)
 	}
 	return c.rdb.Publish(ctx, eventsChannel, payload).Err()
+}
+
+// controlKey is the per-job HASH a running job's send loop polls for live
+// commands (pause/resume/cancel/speed) -- see worker/jobs/replay.py.
+func controlKey(jobID string) string {
+	return fmt.Sprintf("openscale:jobs:%s:control", jobID)
+}
+
+// SetJobControlField writes one field of a job's live-control hash (e.g.
+// "paused", "speed", "cancelled") and refreshes its TTL, so a run's control
+// key never outlives the job by more than controlKeyTTL even if nothing
+// ever cleans it up explicitly.
+func (c *Client) SetJobControlField(ctx context.Context, jobID, field, value string) error {
+	key := controlKey(jobID)
+	if err := c.rdb.HSet(ctx, key, field, value).Err(); err != nil {
+		return fmt.Errorf("redis: set job control field %s: %w", field, err)
+	}
+	if err := c.rdb.Expire(ctx, key, controlKeyTTL).Err(); err != nil {
+		return fmt.Errorf("redis: expire job control key: %w", err)
+	}
+	return nil
 }
 
 // SubscribeJobEvents subscribes to the events channel and decodes each

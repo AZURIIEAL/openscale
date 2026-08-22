@@ -63,10 +63,31 @@ func (h *JobsHandler) Run(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// The Redis-enqueued copy gets job_id merged in so the worker (replay.py
+	// specifically, for its live control hash) knows its own run id --
+	// the DB row keeps the original submitted params untouched, for audit
+	// fidelity.
+	var paramsMap map[string]any
+	if err := json.Unmarshal(params, &paramsMap); err != nil {
+		paramsMap = map[string]any{}
+	}
+	paramsMap["job_id"] = run.ID
+	enqueueParams, err := json.Marshal(paramsMap)
+	if err != nil {
+		errMsg := "failed to encode enqueue params: " + err.Error()
+		_ = h.db.MarkFailed(ctx, run.ID, errMsg)
+		run.Status = jobs.StatusFailed
+		run.Error = &errMsg
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusAccepted)
+		_ = json.NewEncoder(w).Encode(run)
+		return
+	}
+
 	enqueueErr := h.redis.EnqueueJob(ctx, redis.JobRequest{
 		JobID:       run.ID,
 		JobType:     jobType,
-		Params:      params,
+		Params:      enqueueParams,
 		SubmittedAt: run.SubmittedAt.Format(time.RFC3339),
 	})
 	if enqueueErr != nil {
@@ -176,4 +197,63 @@ func (h *JobsHandler) CancelAll(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(CancelAllResponse{Cancelled: runs})
+}
+
+// controlRequest is the body of POST /api/jobs/{id}/control.
+type controlRequest struct {
+	Action          string   `json:"action"`
+	SpeedMultiplier *float64 `json:"speedMultiplier,omitempty"`
+}
+
+// validSpeedMultipliers are the only playback-speed values the Streaming
+// screen's UI exposes -- anything else is rejected rather than silently
+// clamped, since a bogus value here almost certainly means a frontend bug.
+var validSpeedMultipliers = map[float64]bool{1: true, 2: true, 3: true, 5: true, 10: true}
+
+// Control handles POST /api/jobs/{id}/control -- a live command into a
+// running job's Redis control hash (openscale:jobs:{id}:control), currently
+// only meaningful to the `replay` job's send loop (worker/jobs/replay.py).
+// This deliberately doesn't check the run's current DB status first: the
+// same "fire and let the worker notice, or no-op if nobody's listening"
+// tolerance for staleness this feature already has elsewhere (a command
+// reaching a job that already finished is harmless -- the control hash
+// TTLs out on its own).
+func (h *JobsHandler) Control(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+
+	var req controlRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+	defer cancel()
+
+	var err error
+	switch req.Action {
+	case "pause":
+		err = h.redis.SetJobControlField(ctx, id, "paused", "true")
+	case "resume":
+		err = h.redis.SetJobControlField(ctx, id, "paused", "false")
+	case "cancel":
+		err = h.redis.SetJobControlField(ctx, id, "cancelled", "true")
+	case "setSpeed":
+		if req.SpeedMultiplier == nil || !validSpeedMultipliers[*req.SpeedMultiplier] {
+			http.Error(w, "speedMultiplier must be one of 1, 2, 3, 5, 10", http.StatusBadRequest)
+			return
+		}
+		err = h.redis.SetJobControlField(ctx, id, "speed", strconv.Itoa(int(*req.SpeedMultiplier)))
+	default:
+		http.Error(w, "unknown action", http.StatusBadRequest)
+		return
+	}
+
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]bool{"ok": true})
 }

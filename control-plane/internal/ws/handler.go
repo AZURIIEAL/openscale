@@ -33,10 +33,15 @@ type Handler struct {
 // and doesn't cover the upgrade), so this must be set explicitly or every
 // browser connection gets rejected.
 func NewHandler(hub *Hub, lookup RunLookup, allowedOrigin string) *Handler {
-	return &Handler{hub: hub, lookup: lookup, allowedOrigin: originPattern(allowedOrigin)}
+	return &Handler{hub: hub, lookup: lookup, allowedOrigin: OriginPattern(allowedOrigin)}
 }
 
-func originPattern(origin string) string {
+// OriginPattern strips the scheme off origin so it matches nhooyr's
+// OriginPatterns matcher, which compares against the bare host:port.
+// Exported so internal/streaming's WS handler (same origin-check
+// requirement, different Hub) can reuse it instead of duplicating the
+// scheme-stripping logic.
+func OriginPattern(origin string) string {
 	origin = strings.TrimPrefix(origin, "https://")
 	origin = strings.TrimPrefix(origin, "http://")
 	return origin

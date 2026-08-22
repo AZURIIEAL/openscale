@@ -12,6 +12,7 @@ import (
 	"github.com/AZURIIEAL/openscale/control-plane/internal/db"
 	"github.com/AZURIIEAL/openscale/control-plane/internal/docker"
 	"github.com/AZURIIEAL/openscale/control-plane/internal/redis"
+	"github.com/AZURIIEAL/openscale/control-plane/internal/streaming"
 	"github.com/AZURIIEAL/openscale/control-plane/internal/ws"
 )
 
@@ -21,6 +22,8 @@ func NewRouter(
 	database *db.DB,
 	redisClient *redis.Client,
 	wsHandler *ws.Handler,
+	streamingClient *streaming.Client,
+	streamHub *streaming.StreamHub,
 	frontendOrigin string,
 ) http.Handler {
 	r := chi.NewRouter()
@@ -48,6 +51,7 @@ func NewRouter(
 	dashboardsHandler := NewDashboardsHandler(database)
 	appearanceHandler := NewAppearanceHandler(database)
 	queryHandler := NewQueryHandler(database)
+	streamingHandler := NewStreamingHandler(streamingClient, streamHub, frontendOrigin)
 	r.Route("/api", func(r chi.Router) {
 		r.Get("/system-health", healthHandler.ServeHTTP)
 		r.Post("/services/{id}/start", actionHandler.Start)
@@ -59,6 +63,7 @@ func NewRouter(
 		r.Get("/jobs/runs", jobsHandler.ListRuns)
 		r.Delete("/jobs/runs", jobsHandler.ClearRuns)
 		r.Post("/jobs/cancel-all", jobsHandler.CancelAll)
+		r.Post("/jobs/{id}/control", jobsHandler.Control)
 
 		r.Get("/dashboards/overview", dashboardsHandler.Overview)
 		r.Get("/home/stats", dashboardsHandler.HomeStats)
@@ -68,6 +73,9 @@ func NewRouter(
 
 		r.Post("/query", queryHandler.Run)
 		r.Get("/query/catalog", queryHandler.Catalog)
+
+		r.Get("/streaming/topics", streamingHandler.Topics)
+		r.Get("/streaming/ws", streamingHandler.WS)
 
 		r.Get("/ws/jobs/{id}", wsHandler.HandleJobWS)
 	})

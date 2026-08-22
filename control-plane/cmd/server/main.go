@@ -19,6 +19,7 @@ import (
 	"github.com/AZURIIEAL/openscale/control-plane/internal/db"
 	"github.com/AZURIIEAL/openscale/control-plane/internal/docker"
 	"github.com/AZURIIEAL/openscale/control-plane/internal/redis"
+	"github.com/AZURIIEAL/openscale/control-plane/internal/streaming"
 	"github.com/AZURIIEAL/openscale/control-plane/internal/ws"
 )
 
@@ -63,7 +64,12 @@ func main() {
 
 	wsHandler := ws.NewHandler(hub, database, cfg.FrontendOrigin)
 
-	router := api.NewRouter(watcher, database, redisClient, wsHandler, cfg.FrontendOrigin)
+	streamingClient := streaming.NewClient(cfg.KafkaBroker)
+	streamHub := streaming.NewStreamHub()
+	streamConsumer := streaming.NewConsumer(cfg.KafkaBroker, streamHub, logger)
+	go streamConsumer.Run(ctx)
+
+	router := api.NewRouter(watcher, database, redisClient, wsHandler, streamingClient, streamHub, cfg.FrontendOrigin)
 
 	srv := &http.Server{
 		Addr:              ":" + cfg.Port,
