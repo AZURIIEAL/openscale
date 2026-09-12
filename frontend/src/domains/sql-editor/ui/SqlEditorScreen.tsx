@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import { Panel } from '@/shared/design-system/Panel';
 import { useRunQuery } from '../application/useRunQuery';
 import { useQueryHistory } from '../application/useQueryHistory';
@@ -19,8 +20,16 @@ const DEFAULT_SQL =
  * plan) is a separate, larger effort and explicitly not built yet -- the
  * copy below says so rather than implying it works.
  */
+/** A search result for a specific table (see shared/search) lands here
+ * with a ready-to-run SELECT already filled in, via react-router
+ * navigation state, read once on mount. */
+interface SqlEditorNavState {
+  prefillSql?: string;
+}
+
 export function SqlEditorScreen() {
-  const [sql, setSql] = useState(DEFAULT_SQL);
+  const navState = useLocation().state as SqlEditorNavState | null;
+  const [sql, setSql] = useState(navState?.prefillSql ?? DEFAULT_SQL);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const runQuery = useRunQuery();
   const { entries, addEntry, clear } = useQueryHistory();
@@ -73,13 +82,6 @@ export function SqlEditorScreen() {
 
       <div className="flex flex-col gap-4">
         <Panel className="flex flex-col gap-1 p-4">
-          <h3 style={{ margin: 0, fontSize: 18, fontWeight: 700, letterSpacing: '-0.015em', color: 'var(--text-heading)' }}>
-            SQL Editor
-          </h3>
-          <p className="text-wrap-pretty" style={{ margin: '4px 0 12px', fontSize: 13, color: 'var(--text-muted)' }}>
-            Read-only queries against the control-plane's Postgres database -- job history plus whatever Gold and
-            feature tables the pipeline has written. Bronze/Silver Parquet on the lake isn't queryable from here yet.
-          </p>
           <QueryEditor
             sql={sql}
             onChange={setSql}

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import { Panel } from '@/shared/design-system/Panel';
 import { Well } from '@/shared/design-system/Well';
 import { RunButton } from '@/shared/design-system/RunButton';
@@ -22,7 +23,16 @@ const INGEST_FIELDS = JOB_CATALOG.find((job) => job.type === 'ingest')?.paramFie
  * first (RunJobForm); the rest process whatever's currently available
  * upstream and run immediately on click, no configuration step.
  */
+/** Search results (see shared/search) can land here with a specific job's
+ * form already open or a specific run already selected -- react-router
+ * navigation state, read once on mount. */
+interface PipelinesNavState {
+  openJobType?: string;
+  selectedRunId?: string;
+}
+
 export function PipelinesScreen() {
+  const navState = useLocation().state as PipelinesNavState | null;
   const [historyPage, setHistoryPage] = useState(0);
   // Always-page-0 query for "is any job currently running" (catalog
   // spinners, reselect-on-refresh) -- independent of whichever history page
@@ -35,9 +45,9 @@ export function PipelinesScreen() {
   const clearRuns = useClearRuns();
   const cancelAllRuns = useCancelAllRuns();
   const { mutate, mutateAsync, isPending } = useTriggerJob();
-  const [openJobType, setOpenJobType] = useState<string | null>(null);
+  const [openJobType, setOpenJobType] = useState<string | null>(navState?.openJobType ?? null);
   const [runAllFormOpen, setRunAllFormOpen] = useState(false);
-  const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
+  const [selectedRunId, setSelectedRunId] = useState<string | null>(navState?.selectedRunId ?? null);
 
   const runAll = useRunAllJobs(mutateAsync, setSelectedRunId);
   const runAllActive = runAll.state.phase === 'running';

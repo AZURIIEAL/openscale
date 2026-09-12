@@ -134,6 +134,15 @@ services:
       - "8080:8080" # HTTP API, called by the frontend at VITE_API_BASE_URL
     environment:
       PORT: "8080"
+      # Stays the host-facing address, not the frontend container's
+      # in-network name -- this only validates the Origin header on
+      # incoming browser requests (CORS + the WS upgrade's origin check in
+      # internal/ws), and the browser's Origin is whatever URL it loaded
+      # the page from. That's http://localhost:5173 whether the frontend
+      # dev server runs on the host or (as below) inside its own
+      # container publishing the same host port -- the control-plane never
+      # dials the frontend itself, so container-to-container addressing
+      # doesn't apply here.
       FRONTEND_ORIGIN: "http://localhost:5173"
       POSTGRES_DSN: "postgres://openscale:openscale@postgres:5432/openscale?sslmode=disable"
       REDIS_ADDR: "redis:6379"
@@ -148,6 +157,29 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+    container_name: openscale-frontend
+    ports:
+      - "5173:5173" # Vite dev server -- the only port meant to be reached directly by a person's browser
+    environment:
+      # Read by the browser (Vite inlines VITE_-prefixed vars into the
+      # served client bundle), not by this container -- localhost:8080 is
+      # correct because the fetch happens in the browser on the host, not
+      # from inside this container's network namespace.
+      VITE_API_BASE_URL: "http://localhost:8080"
+    volumes:
+      # Bind-mount for live-editing from the host; the anonymous volume on
+      # node_modules stops the host's (possibly Windows-built, incompatible)
+      # node_modules from shadowing the ones installed inside the
+      # container at build time.
+      - ./frontend:/app
+      - /app/node_modules
+    depends_on:
+      - control-plane
     restart: unless-stopped
 
   worker:

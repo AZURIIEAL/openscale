@@ -1,9 +1,9 @@
-import { useEffect, useRef, useState } from 'react';
 import { useLocation } from 'react-router-dom';
-import { Search, X, Bell, ChevronDown, Menu } from 'lucide-react';
+import { Bell, Menu } from 'lucide-react';
 import { NAV_ENTRIES } from './navigation';
+import { SearchBar } from './SearchBar';
+import { AccountMenu } from './AccountMenu';
 import { Badge } from '@/shared/design-system/Badge';
-import { Avatar } from '@/shared/design-system/Avatar';
 import type { Status } from '@/shared/types/status';
 
 interface TopBarProps {
@@ -35,21 +35,6 @@ export function TopBar({ systemStatus, systemStatusLabel, onOpenMenu }: TopBarPr
   const title = entry?.label ?? 'OpenScale';
   const subtitle = entry?.subtitle ?? '';
 
-  const [query, setQuery] = useState('');
-  const [focused, setFocused] = useState(false);
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    const onKeyDown = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
-        e.preventDefault();
-        inputRef.current?.focus();
-      }
-    };
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
-  }, []);
-
   return (
     <header className="mb-5 flex flex-wrap items-center justify-between gap-3" style={{ minHeight: 56 }}>
       <div className="flex min-w-0 flex-1 items-center gap-3" style={{ flexBasis: 280 }}>
@@ -79,84 +64,7 @@ export function TopBar({ systemStatus, systemStatusLabel, onOpenMenu }: TopBarPr
           <span title={systemStatusLabel}>{STATUS_MESSAGE[systemStatus]}</span>
         </Badge>
 
-        <div
-          className="hidden sm:flex"
-          style={{
-            alignItems: 'center',
-            gap: 8,
-            cursor: 'text',
-            width: focused || query ? 280 : 240,
-            height: 36,
-            boxSizing: 'border-box',
-            background: 'var(--surface-card)',
-            borderRadius: 999,
-            padding: '0 10px 0 13px',
-            border: `1px solid ${focused ? 'var(--brand)' : 'var(--border-subtle)'}`,
-            boxShadow: focused ? '0 0 0 3px var(--ring-tint)' : 'var(--shadow-card)',
-            transition: 'width var(--dur-base) var(--ease-out), border-color var(--dur-fast) var(--ease-standard), box-shadow var(--dur-fast) var(--ease-standard)',
-          }}
-          onClick={() => inputRef.current?.focus()}
-        >
-          <Search size={16} color="var(--text-subtle)" strokeWidth={1.75} />
-          <input
-            ref={inputRef}
-            type="text"
-            placeholder="Search jobs, tables, runs"
-            aria-label="Search"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            onFocus={() => setFocused(true)}
-            onBlur={() => setFocused(false)}
-            onKeyDown={(e) => {
-              if (e.key === 'Escape') {
-                setQuery('');
-                e.currentTarget.blur();
-              }
-            }}
-            style={{
-              flex: 1,
-              minWidth: 0,
-              border: 'none',
-              outline: 'none',
-              background: 'transparent',
-              fontFamily: 'var(--font-core)',
-              fontSize: 13,
-              fontWeight: 600,
-              letterSpacing: '-0.01em',
-              color: 'var(--text-body)',
-            }}
-          />
-          {!focused && !query && (
-            <span className="os-kbd" style={{ flex: 'none' }}>
-              ⌘K
-            </span>
-          )}
-          {query && (
-            <button
-              type="button"
-              aria-label="Clear search"
-              onClick={() => {
-                setQuery('');
-                inputRef.current?.focus();
-              }}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                width: 22,
-                height: 22,
-                flex: 'none',
-                padding: 0,
-                border: 'none',
-                borderRadius: 999,
-                cursor: 'pointer',
-                background: 'var(--surface-sunken)',
-              }}
-            >
-              <X size={12} color="var(--text-muted)" />
-            </button>
-          )}
-        </div>
+        <SearchBar />
 
         <button type="button" aria-label="Notifications" className="os-icon-btn" style={{ position: 'relative' }}>
           <Bell size={18} strokeWidth={1.75} />
@@ -174,34 +82,7 @@ export function TopBar({ systemStatus, systemStatusLabel, onOpenMenu }: TopBarPr
           />
         </button>
 
-        <button
-          type="button"
-          aria-label="Account: Abin Binu"
-          className="hidden sm:flex"
-          style={{
-            alignItems: 'center',
-            gap: 8,
-            height: 36,
-            boxSizing: 'border-box',
-            padding: '0 10px 0 3px',
-            border: '1px solid var(--border-subtle)',
-            borderRadius: 999,
-            background: 'var(--surface-card)',
-            boxShadow: 'var(--shadow-card)',
-            cursor: 'pointer',
-            fontFamily: 'var(--font-core)',
-            textAlign: 'left',
-          }}
-        >
-          <Avatar name="Abin Binu" size={30} />
-          <span className="hidden md:flex" style={{ flexDirection: 'column', gap: 1, minWidth: 0, overflow: 'hidden' }}>
-            <span style={{ fontSize: 12.5, fontWeight: 700, letterSpacing: '-0.01em', color: 'var(--text-heading)', whiteSpace: 'nowrap', lineHeight: 1.2 }}>
-              Abin Binu
-            </span>
-            <span style={{ fontSize: 10.5, color: 'var(--text-subtle)', whiteSpace: 'nowrap', lineHeight: 1.2 }}>Platform owner</span>
-          </span>
-          <ChevronDown size={14} color="var(--text-subtle)" className="hidden md:block" />
-        </button>
+        <AccountMenu />
       </div>
     </header>
   );

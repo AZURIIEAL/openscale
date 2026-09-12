@@ -33,6 +33,17 @@ interface ConsoleBarChartProps {
 
 const defaultFormatTick = (n: number) => (n >= 1000 ? `${n / 1000}k` : String(Math.round(n)).padStart(2, '0'));
 
+/** Rounds up to the nearest 1/2/5 x 10^n so evenly-divided axis ticks land
+ * on round numbers (5M/4M/3M/2M/1M/0) instead of arbitrary fractions of
+ * whatever the data's real max happens to be. */
+function niceCeiling(value: number): number {
+  if (value <= 0) return 1;
+  const magnitude = 10 ** Math.floor(Math.log10(value));
+  const fraction = value / magnitude;
+  const niceFraction = fraction <= 1 ? 1 : fraction <= 2 ? 2 : fraction <= 5 ? 5 : 10;
+  return niceFraction * magnitude;
+}
+
 /**
  * Two-series stacked/paired chart with eleven plot treatments, selectable
  * from the Connections screen's "Chart style" picker and applied wherever
@@ -71,11 +82,25 @@ export function ConsoleBarChart({
   const singleSeries = data.every((d) => d.b === 0);
   const effectiveVariant = variant === 'split' && singleSeries ? 'block' : variant === 'paired' && singleSeries ? 'grid' : variant;
 
-  const ceiling = max || Math.max(...data.map((d) => d.a + d.b), 1);
+  const rawCeiling = max || Math.max(...data.map((d) => d.a + d.b), 1);
+  // Round up to a "nice" 1/2/5 x 10^n ceiling before dividing into ticks --
+  // otherwise a fraction of an arbitrary max (e.g. 20% of $4.96M ~= $991.9K)
+  // lands just under a formatTick unit threshold (K vs M) and reads as a
+  // stray, oddly-precise value next to its round-million neighbors.
+  const ceiling = max ? rawCeiling : niceCeiling(rawCeiling);
   const tickValues = Array.from({ length: ticks }, (_, i) => Math.round((ceiling / ticks) * (ticks - i)));
   const mirrored = effectiveVariant === 'split';
   const half = ceiling / 2;
   const axisValues = mirrored ? [half, half / 2, 0, half / 2, half].map((n) => Math.round(n)) : tickValues;
+
+  // A little headroom above the highest tick so a bar at the max value
+  // doesn't reach all the way to the chart's top edge -- without this,
+  // `ceiling` (the tallest tick) sits at 0% from the top and a full-height
+  // bar visually touches the frame. The tick labels/gridlines themselves
+  // are positioned from `ceiling`, unaffected -- only the plotting scale
+  // widens, via HEADROOM_FRACTION below.
+  const HEADROOM_FRACTION = 0.08;
+  const plotCeiling = mirrored ? ceiling : ceiling * (1 + HEADROOM_FRACTION);
 
   const HATCH = 'repeating-linear-gradient(-60deg, var(--ember-500) 0 1px, var(--ember-400) 1px 3px)';
   const P = effectiveVariant === 'hatch' ? HATCH : 'var(--chart-primary)';
@@ -86,7 +111,7 @@ export function ConsoleBarChart({
   const R = 'var(--radius-sm)';
   const GROW = 'height var(--dur-slow) var(--ease-out)';
   const g = (v: number) => (grown ? v : 0);
-  const pc = (n: number) => `${g((n / ceiling) * 100)}%`;
+  const pc = (n: number) => `${g((n / plotCeiling) * 100)}%`;
 
   const legend = (
     <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 16, marginBottom: 12, fontSize: 14, fontWeight: 500, color: 'var(--text-body)' }}>
@@ -235,19 +260,43 @@ export function ConsoleBarChart({
     <div style={{ fontFamily: 'var(--font-core)', ...style }}>
       {legend}
       <div style={{ display: 'flex', gap: 12 }}>
-        <div className="os-tabular-nums" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between', height, paddingBottom: 26, fontSize: 13, color: 'var(--text-subtle)' }}>
-          {axisValues.map((t, i) => (
-            <span key={i}>{formatTick(t)}</span>
-          ))}
-          {!mirrored && <span>00</span>}
+        <div className="os-tabular-nums" style={{ position: 'relative', height, minWidth: 60, fontSize: 13, color: 'var(--text-subtle)' }}>
+          {mirrored ? (
+            <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', justifyContent: 'space-between', paddingBottom: 26 }}>
+              {axisValues.map((t, i) => (
+                <span key={i}>{formatTick(t)}</span>
+              ))}
+            </div>
+          ) : (
+            <div style={{ position: 'absolute', inset: '0 0 26px 0' }}>
+              {[...axisValues, 0].map((v, i) => (
+                <span
+                  key={i}
+                  style={{ position: 'absolute', top: `${100 - (v / plotCeiling) * 100}%`, left: 0, right: 0, textAlign: 'right', transform: 'translateY(-50%)', whiteSpace: 'nowrap' }}
+                >
+                  {formatTick(v)}
+                </span>
+              ))}
+            </div>
+          )}
         </div>
         <div style={{ position: 'relative', flex: 1, height, minWidth: 0 }}>
           {plated && <div style={{ position: 'absolute', inset: '0 0 26px 0', background: 'var(--surface-sunken)', borderRadius: 'var(--radius-lg)' }} />}
-          <div style={{ position: 'absolute', inset: '0 0 26px 0', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
-            {axisValues.map((_t, i) => (
-              <span key={i} style={{ borderTop: '1px dashed var(--chart-grid)' }} />
-            ))}
-            {!mirrored && <span style={{ borderTop: '1px dashed var(--chart-grid)' }} />}
+          <div style={{ position: 'absolute', inset: '0 0 26px 0' }}>
+            {mirrored ? (
+              <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                {axisValues.map((_t, i) => (
+                  <span key={i} style={{ borderTop: '1px dashed var(--chart-grid)' }} />
+                ))}
+              </div>
+            ) : (
+              [...axisValues, 0].map((v, i) => (
+                <span
+                  key={i}
+                  style={{ position: 'absolute', top: `${100 - (v / plotCeiling) * 100}%`, left: 0, right: 0, borderTop: '1px dashed var(--chart-grid)' }}
+                />
+              ))
+            )}
           </div>
           {variant === 'area' && areaPlot()}
           <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'flex-end', justifyContent: 'space-around', gap, paddingLeft: platePad, paddingRight: platePad, boxSizing: 'border-box' }}>
