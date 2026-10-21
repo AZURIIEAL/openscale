@@ -2,215 +2,321 @@
 
 ![OpenScale Home screen](docs/screenshot-home.png)
 
-A self-hosted, generic data-platform control console — the thing you'd reach
-for instead of Databricks. One UI for pipelines, a SQL editor, a data
-catalog, an ML workbench, streaming, dashboards, and the infrastructure
-underneath all of it.
+A self-hosted data-platform console, the thing you'd reach for instead of
+Databricks. One UI covers pipelines, a SQL editor, a data catalog,
+streaming, dashboards, an ML workbench, notebooks, and the infrastructure
+underneath them. All of it runs from one `docker compose up`.
 
-The repo currently holds two things:
+Today it runs one real workload end to end: an NYC Yellow Taxi lakehouse
+(Bronze → Silver → Gold → Features → Model) on Spark, MinIO, Postgres,
+Redis and Kafka. The generic platform, meaning bring-your-own data,
+connectors and a pipeline builder, is on the
+[roadmap](ideas/vision-and-roadmap.md).
 
-- **The platform** (`frontend/` + `control-plane/`) — the generic console
-  itself, in active development.
-- **[`etl-exposure/`](etl-exposure/)** — a complete, working NYC Yellow
-  Taxi lakehouse pipeline (Bronze/Silver/Gold, streaming, feature store, ML,
-  API, Grafana dashboards), built first as a proof of what a real data
-  platform needs. It's the platform's first target workload, not the
-  platform — **treated as reference/legacy code**: nothing in `frontend/`
-  or `control-plane/` imports from it.
+---
 
-See [`ideas/vision-and-roadmap.md`](ideas/vision-and-roadmap.md) for the
-full product vision and phased roadmap, and
-[`ideas/tech-stack.md`](ideas/tech-stack.md) for the reasoning behind every
-technology choice below.
+## Contents
+
+- [Quickstart](#quickstart)
+- [First run: load some data](#first-run-load-some-data)
+- [Services, ports and logins](#services-ports-and-logins)
+- [What's built](#whats-built)
+- [Architecture](#architecture)
+- [Observability](#observability)
+- [Repo layout](#repo-layout)
+- [Development](#development)
+- [Troubleshooting](#troubleshooting)
+- [Security](#security)
+- [Design principles](#design-principles)
+
+---
 
 ## Quickstart
 
-**Prerequisites:** Docker Desktop, Node.js 20+, Go 1.26+ (only needed if
-you want to run the control-plane outside Docker for hot-reload).
+**Prerequisites:** Docker with Compose v2+ and about **8 GB of free RAM**.
+The stack idles at about 4 GB, and Spark jobs need more. Node.js 20+ and
+Go 1.26+ are only needed if you want to run the frontend or control-plane
+outside Docker.
 
 ```bash
-# Everything -- MinIO, Kafka, Postgres, Redis, Prometheus, Grafana, the
-# Go control-plane, the Python worker, Jupyter, MLflow, and the frontend
-# itself -- as one Docker Compose project.
+git clone https://github.com/AZURIIEAL/openscale.git
+cd openscale
 docker compose up -d --build
 ```
 
-Open **http://localhost:5173**. The console talks to the control-plane at
-`http://localhost:8080` (override with `VITE_API_BASE_URL` if needed).
-
-Prefer running the frontend on the host instead (native file-watching,
-no polling)?
+The first build takes a few minutes, mostly the Spark worker image. Then:
 
 ```bash
-docker compose up -d --build
-docker compose stop frontend   # stop just the containerized frontend
-cd frontend && npm install && npm run dev
+docker compose ps                     # every service should be running
+docker compose logs -f control-plane  # wait for "control-plane listening"
 ```
+
+Open **http://localhost:5173**.
+
+> If the build fails with `pip`/`npm`/`go` timeouts or DNS errors, your
+> network doesn't get along with Docker's build network. Run
+> `scripts/build-images.sh` then `docker compose up -d` instead. See
+> [Troubleshooting](#troubleshooting).
+
+To stop it:
+
+```bash
+docker compose down      # stop, keep all data
+docker compose down -v   # stop and delete every volume (Postgres, MinIO, Redis, Grafana, Prometheus)
+```
+
+## First run: load some data
+
+A fresh stack starts with an empty lake, so Home, Dashboards and the SQL
+Editor have nothing to show yet. Open **Pipelines** and run the stages in
+order, or use **Run All**, which chains them:
+
+| # | Stage | What it does | Needs |
+|---|---|---|---|
+| 1 | **Ingest (Bronze)** | Downloads NYC TLC Parquet for a month range, validates the schema, writes to MinIO | A month range, e.g. `2024-07` → `2024-12`; internet access |
+| 2 | **Validate (Silver)** | Rejects, quarantines or flags bad rows, writes clean trips | Bronze |
+| 3 | **Aggregate (Gold)** | Daily revenue, hourly demand, zone stats and congestion, in MinIO and Postgres | Silver |
+| 4 | **Compute Features** | Zone × hour features, to Postgres (offline) and Redis (online) | Silver |
+| 5 | **Train Fare Model** | Trains a fare-prediction model and logs it to MLflow | Silver |
+
+Each run streams its status and logs live. After Gold, the Home and
+Dashboards screens fill in. After Silver, **Streaming → Replay** can push
+real trips through Kafka.
+
+To start over, **Pipelines → Clear data (Postgres + MinIO)** wipes Bronze, Silver and Gold
+and the Gold/feature tables, but keeps job history.
+
+## Services, ports and logins
+
+Everything binds to `localhost`. The credentials are **local development
+defaults**. Change them before exposing anything (see [Security](#security)).
+
+| Service | URL / address | Login |
+|---|---|---|
+| **OpenScale console** | http://localhost:5173 | none |
+| Control-plane API | http://localhost:8080 (`/healthz`, `/metrics`, `/api/*`) | none |
+| Grafana | http://localhost:3000 | `admin` / `admin`; anonymous users can view |
+| Prometheus | http://localhost:9090 | none |
+| MinIO console | http://localhost:9101 | `minioadmin` / `minioadmin` |
+| MinIO S3 API | http://localhost:9000 | same |
+| JupyterLab | http://localhost:8888/lab?token=openscale-dev | token `openscale-dev` |
+| MLflow | http://localhost:5000 | none |
+| Postgres | `localhost:5432`, db `openscale` | `openscale` / `openscale` |
+| Redis | `localhost:6379` | none |
+| Kafka | `localhost:29092` (in-network: `kafka:9092`) | none |
+
+The Postgres, Redis and Kafka exporters have no host ports. Only
+Prometheus reads them.
+
+## What's built
+
+Every screen below is backed by a real control-plane endpoint or an
+embedded real service, not mock data. The caveats are the real limits.
+
+| Screen | What's real | Limits |
+|---|---|---|
+| **Home** | Live container CPU/memory gauges, job history, Gold-backed revenue trend and stat cards | |
+| **Pipelines** | Triggers the real job queue end to end (control-plane → Redis → worker → Postgres), live status and logs over WebSocket, run-all chaining, cancel-all, clear data | Spark jobs can't be cancelled mid-run, so cancel restarts the worker container |
+| **SQL Editor** | Read-only `SELECT`/`WITH` against Postgres (Gold tables, feature table, job history) inside a read-only transaction, schema browser, query history | Postgres only; Bronze/Silver Parquet in the lake isn't queryable yet |
+| **Data Catalog** | Postgres schema browser (row counts and sample rows) and a live MinIO lake browser (object counts and sizes per layer) | Lineage is a static diagram of the five stages, not computed; no Parquet preview |
+| **Streaming** | `replay` streams real Silver trips onto Kafka; the control-plane tails the topic and pushes live trips and windowed aggregates over WebSocket. Pause, resume, cancel and ×1–×10 speed act on the running replay | One topic, `yellow-taxi-trips` |
+| **Dashboards** | Gold-layer charts: daily revenue, hourly demand, top zones, congestion, ETL health. Chart style and theme can be re-skinned | Fixed set of charts, no custom builder |
+| **ML Workbench** | Embedded MLflow, tracking the same store the `train` job logs to | |
+| **Notebooks** | Embedded JupyterLab, opened on three example notebooks | |
+| **Infrastructure** | Docker inspection of nine services, with start/stop/restart | |
+| **Settings** | Theme, accent, chart style and 12 interface skins, saved to Postgres | |
+| **Search (⌘K / Ctrl+K)** | Live search across screens, job types, Postgres tables and recent runs; picking a result opens that item directly | |
+
+**Not built yet:** generic connectors, a config-driven pipeline builder,
+scheduling, and auth. See [`ideas/vision-and-roadmap.md`](ideas/vision-and-roadmap.md).
 
 ## Architecture
 
 ```
-┌─────────────┐   HTTP (JSON) +  ┌──────────────────┐   Docker Engine API   ┌──────────────────────────┐
-│  frontend   │   WebSocket      │   control-plane   │──────────────────────▶│  Docker daemon           │
-│  React/Vite │ ───────────────▶ │   Go / chi        │                        │  (inspects every         │
-│  :5173      │ ◀─────────────── │   :8080           │◀───────────────────────│   sibling container)     │
-└─────────────┘                  └──────────────────┘   container state       └──────────────────────────┘
+┌──────────────┐  HTTP + WebSocket  ┌────────────────────┐  Docker Engine API  ┌──────────────────┐
+│   frontend   │ ─────────────────▶ │   control-plane    │ ──────────────────▶ │  Docker daemon   │
+│ React · Vite │ ◀───────────────── │   Go · chi · :8080 │                     │ (sibling         │
+│    :5173     │                    │                    │                     │  containers)     │
+└──────────────┘                    └─────────┬──────────┘                     └──────────────────┘
+                                              │ Postgres · Redis · Kafka · MinIO
+                                              ▼
 ```
 
-The frontend never talks to Postgres, Redis, Kafka, MinIO, or Docker
-directly — every data source is fronted by the Go control-plane over a
-versioned HTTP/WebSocket API. Each frontend domain reads through a
-**gateway interface it owns** (mock or HTTP implementation swapped behind
-one line, per domain).
+**The browser only talks to the control-plane.** The frontend never
+reaches Postgres, Redis, Kafka, MinIO or Docker directly. Every data source
+sits behind the Go control-plane's HTTP/WebSocket API. Inside the
+control-plane, each backend has its own package (`internal/db`,
+`internal/redis`, `internal/streaming`, `internal/lake`, `internal/docker`),
+and no other package imports that backend's SDK.
 
-The control-plane itself fronts four more backends, each isolated to its
-own package (`internal/db`, `internal/redis`, `internal/streaming`,
-`internal/lake`) so nothing outside that package touches the underlying
-SDK directly:
+**Long-running work goes through a queue.** The control-plane never runs
+Spark itself. It records the run and enqueues it:
 
 ```
-control-plane ──dispatch──▶ Redis Stream ──consume──▶ worker (Python/PySpark)
-                                                             │
-                                    ┌────────────────────────┼────────────────────────┐
-                                    ▼                         ▼                        ▼
-                                Postgres                   MinIO                    Kafka
-                             (writes Gold +          (Bronze/Silver/Gold        (replay job
-                              feature tables)          Parquet, via Spark)     produces trips)
+POST /api/jobs/{type}/run
+  └─▶ control-plane: INSERT job_runs (queued) ─▶ XADD openscale:jobs:requests
+                                                        │
+                          worker (Python/PySpark) ◀─────┘ XREADGROUP
+                            ├─ writes Bronze/Silver/Gold Parquet ─▶ MinIO
+                            ├─ writes Gold + feature tables ─────▶ Postgres
+                            ├─ replay job produces trips ────────▶ Kafka
+                            ├─ final status + full log ──────────▶ Postgres job_runs (system of record)
+                            └─ live status/log events ───────────▶ Redis pub/sub openscale:jobs:events
+                                                                        │
+            browser ◀── WebSocket /api/ws/jobs/{id} ◀── control-plane hub ◀┘
 
-worker ──live status/log──▶ Redis pub/sub ──relay──▶ control-plane's WebSocket hub ──▶ browser
-control-plane ──tails──▶ Kafka topic ──▶ control-plane's WebSocket hub ──▶ browser (Streaming screen)
+Kafka yellow-taxi-trips ─▶ control-plane consumer ─▶ windowed aggregates ─▶ WebSocket /api/streaming/ws
 ```
 
-Long-running work (the five pipeline stages, plus a Kafka replay) is
-dispatched onto a Redis Stream and executed by the Python worker — the
-control-plane itself never runs a Spark job or blocks on one; it only
-enqueues the request and relays whatever status/log/trip events come back.
+The details live in the component READMEs:
+[control-plane](control-plane/README.md) · [worker](worker/README.md) ·
+[frontend](frontend/README.md).
+
+## Observability
+
+Prometheus scrapes every part of the stack every 15s, and Grafana comes
+provisioned with the datasource and two dashboards in an **OpenScale**
+folder.
+
+| Prometheus job | Source | Main metrics |
+|---|---|---|
+| `control-plane` | `control-plane:8080/metrics` | `openscale_http_requests_total`, `openscale_http_request_duration_seconds` (per chi route pattern), `openscale_job_runs{job_type,status}` (read from Postgres at scrape time), Go runtime |
+| `postgres` | `postgres-exporter` | `pg_up`, database size, connections, commits/rollbacks, tuple reads/writes |
+| `redis` | `redis-exporter` | memory, clients, commands by type, keys |
+| `kafka` | `kafka-exporter` | brokers, per-topic offsets (messages/s) |
+| `minio`, `minio-bucket` | MinIO's built-in `/minio/v2/metrics/*` | lake size and objects, S3 requests/errors/traffic, health |
+| `prometheus` | itself | |
+
+Dashboards:
+
+- **OpenScale · Control plane & pipelines**
+  (http://localhost:3000/d/openscale-control-plane): API request rate,
+  5xx %, p95 latency per route, runtime stats, and job runs by type and
+  status.
+- **OpenScale · Infrastructure**
+  (http://localhost:3000/d/openscale-infrastructure): up/down per backend,
+  then MinIO, Postgres, Redis and Kafka sections.
+
+The config lives in [`observability/`](observability/): the scrape config
+is in `prometheus/prometheus.yml`, and the datasource and dashboard JSON
+are in `grafana/provisioning/`. Dashboards are loaded from files, so to
+change one permanently, edit the JSON (or export it from Grafana into
+that folder) and run `docker compose restart grafana`.
 
 ## Repo layout
 
 ```
-control-plane/     Go backend — cmd/server + internal/{api,db,docker,health,jobs,lake,redis,streaming,ws,config}
-frontend/           React 19 + TypeScript + Vite console, one domain per screen (DDD-structured), Dockerized
-worker/              Python job-queue worker — Spark ETL (Bronze/Silver/Gold/Features/Train) + Kafka replay producer
-jupyter/              JupyterLab image (the Notebooks screen embeds this via iframe)
-notebooks/            The 3 example notebooks JupyterLab opens (copied from etl-exposure/, not mounted from it)
-etl-exposure/        The NYC taxi lakehouse pipeline -- reference/legacy, not a dependency
-ideas/                 Vision, roadmap, and tech-stack decision docs
-observability/          Prometheus scrape config + Grafana provisioning, owned by the root compose stack
-docs/                    README assets (screenshots)
-docker-compose.yml       The full stack, one "openscale" compose project -- frontend included
+control-plane/   Go API: cmd/server + internal/{api,config,db,docker,health,jobs,lake,metrics,redis,streaming,ws}
+frontend/        React 19 + TypeScript + Vite console, one DDD-style domain per screen
+worker/          Python job worker: Spark ETL (ingest/silver/gold/features/train), Kafka replay, reset
+jupyter/         JupyterLab image (embedded by the Notebooks screen)
+notebooks/       The example notebooks JupyterLab opens
+observability/   Prometheus scrape config + Grafana datasource/dashboards
+scripts/         Helper scripts (build-images.sh)
+ideas/           Vision, roadmap, and tech-stack decision records
+etl-exposure/    The original standalone taxi pipeline: reference/legacy, nothing imports it
+docs/            README assets
+docker-compose.yml   The whole stack as one "openscale" compose project
 ```
-
-## What's actually built
-
-Honesty over hype — every screen below is real (backed by an actual
-control-plane endpoint or an embedded real service), not a mock or a
-placeholder. Depth varies by screen; the caveats are the actual limits,
-not modesty:
-
-| Screen | What's real |
-|---|---|
-| Home | Live container memory/CPU gauges, real job history, real Gold-backed revenue trend and stat cards |
-| Pipelines | Triggers the real job queue end to end (control-plane → Redis → worker → Postgres), live status/logs over WebSocket, run-all chaining, cancel |
-| SQL Editor | Read-only `SELECT`/`WITH` against real Postgres tables (Gold + feature table + job history) inside an actual read-only transaction. **Postgres only** — Bronze/Silver Parquet on the lake isn't queryable here yet |
-| Data Catalog | Real Postgres schema browser (row counts + sample rows via the SQL Editor's own query engine) *and* a live MinIO lake browser (real object counts/sizes across Bronze/Silver/quarantine/Gold). No column-level lineage, no Parquet content preview — a static diagram of the five real pipeline stages, not a computed graph |
-| Streaming | A `replay` job streams real Silver-layer trips onto a real Kafka topic; the control-plane tails it and pushes live trip events + windowed aggregates over WebSocket. Pause/resume/cancel/×1–×10 speed control the in-flight replay live |
-| Dashboards | Real Gold-layer charts — daily revenue, hourly demand, top zones, congestion, ETL health — chart style/theme fully re-skinnable |
-| ML Workbench | An iframe embedding a real MLflow server, tracking the same store the worker's `train` job actually logs to |
-| Notebooks | An iframe embedding a real JupyterLab, opened on 3 real example notebooks |
-| Infrastructure | Real Docker container inspection + start/stop/restart |
-| Settings | Real appearance/interface preferences (theme, accent, chart style, 12 interface skins), persisted to Postgres |
-| Global search (⌘K) | Real, live-filtered search across screens, job types, Postgres tables, and recent runs — selecting a result navigates there with the specific thing (a table, a run) already loaded |
-| System health (`GET /api/system-health`) | Real Docker container inspection across 9 watched services |
-
-Generic connectors, a config-driven pipeline builder, and multi-user auth
-are still just roadmap (`ideas/vision-and-roadmap.md`'s Phases 3+) — this
-is a real console for *this* pipeline, not yet the generic platform the
-roadmap describes.
-
-## Tech stack
-
-| Layer | Pick |
-|---|---|
-| Frontend | React 19, TypeScript, Vite 8, Tailwind CSS v4, TanStack Query, React Router v7, Zustand — Dockerized (polling file-watch for HMR through the bind mount) |
-| Backend | Go, [chi](https://github.com/go-chi/chi) router, [pgx/v5](https://github.com/jackc/pgx) (Postgres), [go-redis/v9](https://github.com/redis/go-redis) (job dispatch + live event pub/sub), [segmentio/kafka-go](https://github.com/segmentio/kafka-go), [minio-go/v7](https://github.com/minio/minio-go) (lake browsing), [nhooyr.io/websocket](https://github.com/nhooyr/websocket), [docker/docker](https://pkg.go.dev/github.com/docker/docker/client) Engine API SDK, zerolog, caarlos0/env |
-| Worker | Python, PySpark (Bronze→Silver→Gold→Features→Train), kafka-python (the Streaming replay producer), psycopg2, redis-py, MLflow client, scikit-learn |
-| Infra (this stack) | MinIO, Kafka (KRaft, no Zookeeper), Postgres, Redis, Prometheus, Grafana, JupyterLab, MLflow — all Dockerized |
-| Design system | Custom neomorphic/skeuomorphic component set (not a UI kit) — 12 selectable interface-style skins, dual soft-shadow tokens, light/dark themes, self-hosted fonts |
-
-Full rationale for each pick, including what was considered and rejected
-(Next.js, shadcn, Python for the control-plane), is in
-[`ideas/tech-stack.md`](ideas/tech-stack.md).
 
 ## Development
 
-### Control-plane (Go)
-
-```bash
-cd control-plane
-go run ./cmd/server        # :8080, reads Docker via the platform default socket/pipe
-go build ./...
-go vet ./...
-```
-
-Config is env-driven (see `internal/config/config.go`) — defaults below
-are the host-run values; `docker-compose.yml` overrides the connection
-strings to in-network container names for the control-plane's own service:
-
-| Var | Default (host-run) | Meaning |
+| Component | Run it | Docs |
 |---|---|---|
-| `PORT` | `8080` | HTTP listen port |
-| `FRONTEND_ORIGIN` | `http://localhost:5173` | CORS-allowed origin + WebSocket upgrade origin check |
-| `DOCKER_HOST` | *(SDK default)* | Override the Docker Engine API endpoint |
-| `POSTGRES_DSN` | `postgres://openscale:openscale@localhost:5432/openscale?sslmode=disable` | Postgres connection string |
-| `REDIS_ADDR` | `localhost:6379` | Job dispatch stream + live event pub/sub |
-| `KAFKA_BROKER` | `localhost:29092` | Kafka's external listener (compose overrides to the in-network `kafka:9092`) |
-| `MINIO_ENDPOINT` | `http://localhost:9000` | MinIO/S3 endpoint the Data Catalog's lake browser reads |
-| `MINIO_ACCESS_KEY` / `MINIO_SECRET_KEY` | `minioadmin` / `minioadmin` | Local dev credentials only |
+| Frontend | Runs in Docker with hot reload already; or `cd frontend && npm install && npm run dev` after `docker compose stop frontend` | [frontend/README.md](frontend/README.md) |
+| Control-plane | `cd control-plane && go run ./cmd/server` after `docker compose stop control-plane` | [control-plane/README.md](control-plane/README.md) |
+| Worker | Rebuild after changes: `docker compose up -d --build worker` | [worker/README.md](worker/README.md) |
 
-### Frontend (React)
+The frontend container bind-mounts `./frontend`, so UI edits hot-reload
+with no rebuild. Go and Python changes need their image rebuilt.
+
+Two lists are kept in sync by hand:
+
+- **Job types**: `jobs.Catalog` in
+  [control-plane/internal/jobs/jobs.go](control-plane/internal/jobs/jobs.go),
+  `JOB_TABLE` in [worker/main.py](worker/main.py), and `JOB_CATALOG` in
+  [frontend/src/domains/pipelines/domain/entities.ts](frontend/src/domains/pipelines/domain/entities.ts)
+  (which leaves out `replay` and `reset` on purpose).
+- **Routes**: [frontend/src/app/router.tsx](frontend/src/app/router.tsx) and
+  [frontend/src/shared/layout/navigation.ts](frontend/src/shared/layout/navigation.ts).
+
+## Troubleshooting
+
+**`pull access denied for minio/minio`.** MinIO stopped publishing public
+images. The compose file already uses the community builds `pgsty/minio`
+and `pgsty/mc`. Pull the latest repo.
+
+**Build fails with `Read timed out` (pip), `ETIMEDOUT` (npm) or
+`dial udp ... network is unreachable` (go).** Containers can't reach the
+internet reliably during the build, usually because of an MTU or IPv6
+mismatch between Docker's bridge network and your connection. Build
+on the host's network instead:
 
 ```bash
-cd frontend
-npm run dev      # Vite dev server, :5173
-npm run build    # tsc -b && vite build
-npm run lint      # oxlint
+scripts/build-images.sh            # all images; or name some: scripts/build-images.sh worker
+docker compose up -d               # no --build, so compose uses those images
 ```
 
-`VITE_API_BASE_URL` (default `http://localhost:8080`) points the frontend
-at the control-plane — read by the *browser* (Vite inlines `VITE_`-prefixed
-vars into the served bundle), so this stays `localhost` even when the
-frontend itself runs in its own container.
+(Adding `network: host` to the compose file doesn't help: Compose builds
+through Buildx Bake, which refuses host networking without an `--allow`
+flag that `docker compose` can't pass.)
 
-### Full stack via Docker
+**A port is already in use.** Change the left side of that service's
+`ports:` mapping in `docker-compose.yml`. If you move the control-plane or
+frontend ports, update `VITE_API_BASE_URL` and `FRONTEND_ORIGIN` to match.
 
-```bash
-docker compose up -d --build   # everything, including the frontend
-docker compose ps
-docker compose logs -f control-plane
-```
+**A Spark job dies or the worker restarts mid-job.** Spark's driver gets
+`SPARK_DRIVER_MEMORY=6g` by default (set on the `worker` service). Lower it
+on a smaller machine, or ingest fewer months at once.
 
-The compose project is named `openscale`; MinIO, Kafka, Postgres, Redis,
-Prometheus, Grafana, Jupyter, MLflow, the Go control-plane, the Python
-worker, and the frontend all run under it as one stack.
-`etl-exposure/docker-compose.yml` still exists but is superseded — don't
-run both at once, they define containers with the same names.
+**Home and Dashboards are empty.** You haven't run Gold yet. See
+[First run](#first-run-load-some-data).
 
-## Design principles this codebase follows
+**A Grafana dashboard says "No data" everywhere.** Check that its targets
+are up at http://localhost:9090/targets. A tab opened before a dashboard
+was renamed or removed keeps showing the old layout; reload it.
 
-- **Domain-Driven Design** — each frontend screen is a self-contained
-  domain (`domain/`, `application/`, `infrastructure/`, `ui/`); the Go
-  backend separates transport (`internal/api`) from the Docker adapter
-  (`internal/docker`) from pure domain types (`internal/health`).
-- **Dependency inversion** — frontend hooks depend on gateway *interfaces*
-  they own, never on a concrete HTTP client; swapping mock → real is a
-  one-line change per domain.
-- **One package per external system, on the backend** — `internal/redis`,
-  `internal/docker`, `internal/streaming` (Kafka), and `internal/lake`
-  (MinIO) are each the *only* file importing that system's SDK; nothing
-  outside them touches go-redis, the Docker client, kafka-go, or minio-go
-  directly.
-- **No fake data in real screens, no fake controls on real data** — a
-  screen either has a real backend behind it, or it says so.
-- **`etl-exposure/` is read-only history** — copy logic out of it if a
+**Don't run `etl-exposure/docker-compose.yml` at the same time.** It uses
+the same container names.
+
+## Security
+
+OpenScale has **no authentication**. It assumes the only person who can
+reach it is the one running it. The console can start and stop containers
+(it mounts the Docker socket), wipe the lake, and run code through
+Jupyter, and every bundled service uses a default password.
+
+Before putting it anywhere other than `localhost`:
+
+1. Put an auth layer in front of it, e.g. Cloudflare Tunnel + Cloudflare
+   Access, an OAuth proxy, or a VPN such as Tailscale.
+2. Change the default credentials for Postgres, MinIO, Grafana and the
+   Jupyter token.
+3. Don't publish the infrastructure ports (5432, 6379, 9000, 29092, …) to
+   the internet.
+
+## Design principles
+
+- **Domain-driven structure.** Each frontend screen is a self-contained
+  domain (`domain/`, `application/`, `infrastructure/`, `ui/`). The Go
+  backend separates transport (`internal/api`) from adapters
+  (`internal/docker`, `internal/db`, …) from pure domain types
+  (`internal/health`, `internal/jobs`).
+- **Dependency inversion.** Frontend hooks depend on gateway interfaces
+  they own, never on a concrete HTTP client. Switching a domain from mock
+  to real is a one-line change.
+- **One package per external system.** Only `internal/redis` imports
+  go-redis, only `internal/docker` imports the Docker SDK,
+  `internal/streaming` kafka-go, `internal/lake` minio-go, and
+  `internal/metrics` the Prometheus client.
+- **No fake data in real screens, and no fake controls on real data.** A
+  screen either has a real backend behind it, or it says it doesn't.
+- **`etl-exposure/` is read-only history.** Copy logic out of it when a
   platform feature needs it; never import from it.
+
+## Further reading
+
+- [`ideas/vision-and-roadmap.md`](ideas/vision-and-roadmap.md): product vision and phased roadmap, with current status
+- [`ideas/tech-stack.md`](ideas/tech-stack.md): why each technology was picked, and where the build ended up differing
+- [`ideas/brainstorm.md`](ideas/brainstorm.md): the original idea list
+- [`etl-exposure/README.md`](etl-exposure/README.md): the standalone pipeline OpenScale grew out of

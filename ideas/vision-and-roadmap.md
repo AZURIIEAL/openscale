@@ -10,6 +10,28 @@ running on top of the platform, not the platform itself.
 
 ---
 
+## Status (October 2026)
+
+The sections below are the original plan, kept as written. This table
+shows where the build actually stands. The root [README](../README.md#whats-built)
+has per-screen detail.
+
+| Phase | Status | Notes |
+|---|---|---|
+| 0: Foundation | ✅ Done | Go control-plane, React/Vite console, design system, Postgres schema, one compose stack. A custom component set was used instead of shadcn |
+| 1: Observe | ✅ Done | MinIO lake browser, Postgres catalog, SQL Editor. The SQL Editor queries **Postgres**, not DuckDB over Parquet, so Bronze/Silver aren't queryable yet. Prometheus + Grafana now monitor the platform itself |
+| 2: Control | ✅ Done | Redis Streams queue + Python worker, live status/logs over WebSocket, run-all, cancel, clear data |
+| 3: Bring your own data | ⏳ Not started | Connectors, `quality_rules` rule builder |
+| 4: Pipeline builder | ⏳ Not started | DAGs as data, multi-engine, scheduling |
+| 5: ML workbench | 🟡 Partial | Embedded MLflow + `train` job. No feature-store browser, templates, or serving |
+| 6: Streaming | 🟡 Partial | Kafka replay with live pause/resume/speed, live trip feed + windowed aggregates. Taxi topic only |
+| 7: Dashboards & alerting | 🟡 Partial | Fixed Gold-layer dashboards, re-skinnable. No builder, no alerting |
+| 8: Catalog & lineage | 🟡 Partial | Catalog browsing works. Lineage is a static five-stage diagram |
+| 9: Multi-user & auth | ⏳ Not started | No auth at all, so don't expose it publicly |
+| 10: Differentiators | 🟡 Started | ⌘K global search / command palette is built |
+
+---
+
 ## 1. What it looks like
 
 **Navigation** — a left sidebar, skeuomorphic control-console styling,
@@ -186,6 +208,8 @@ better in ways a vendor selling compute has no incentive to build.
 ## Honest note on scope
 
 This is a multi-year plan compressed into ten phases, not a sprint list.
-`etl-exposure/` is real, proven, and worth building on top of — but
-everything in this document is design, not code, as of today. Treat each
-phase as a checkpoint to re-scope from, not a commitment made in advance.
+`etl-exposure/` is real, proven, and worth building on top of. When this
+was first written, everything in this document was design, not code;
+see [Status](#status-october-2026) for what has been built since. Treat
+each phase as a checkpoint to re-scope from, not a commitment made in
+advance.

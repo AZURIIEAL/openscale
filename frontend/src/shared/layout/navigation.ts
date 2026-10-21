@@ -48,12 +48,12 @@ export const NAV_ENTRIES: NavEntry[] = [
     icon: DataCatalogIcon,
     subtitle: 'Postgres schema, the MinIO lake, and real pipeline lineage.',
   },
-  { path: '/notebooks', label: 'Notebooks', icon: NotebooksIcon, subtitle: 'Jupyter, wired to the lake. Coming soon.' },
+  { path: '/notebooks', label: 'Notebooks', icon: NotebooksIcon, subtitle: 'JupyterLab, opened on the example notebooks.' },
   {
     path: '/ml-workbench',
     label: 'ML Workbench',
     icon: MlWorkbenchIcon,
-    subtitle: 'Train and evaluate models. Coming soon.',
+    subtitle: 'MLflow experiments and models from the train job.',
   },
   {
     path: '/streaming',

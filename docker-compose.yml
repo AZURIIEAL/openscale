@@ -159,7 +159,6 @@ services:
   control-plane:
     build:
       context: ./control-plane
-      network: host
     container_name: openscale-control-plane
     ports:
       - "8080:8080" # HTTP API, called by the frontend at VITE_API_BASE_URL
@@ -193,7 +192,6 @@ services:
   frontend:
     build:
       context: ./frontend
-      network: host
     container_name: openscale-frontend
     ports:
       - "5173:5173" # Vite dev server -- the only port meant to be reached directly by a person's browser
@@ -217,7 +215,6 @@ services:
   worker:
     build:
       context: ./worker
-      network: host
     container_name: openscale-worker
     environment:
       REDIS_ADDR: "redis:6379"
@@ -260,7 +257,6 @@ services:
   jupyter:
     build:
       context: ./jupyter
-      network: host
     container_name: openscale-jupyter
     ports:
       - "8888:8888"
@@ -280,7 +276,6 @@ services:
     # to, so nothing needs migrating.
     build:
       context: ./worker
-      network: host
     container_name: openscale-mlflow
     entrypoint: ["mlflow"]
     command:

@@ -6,6 +6,28 @@ this one records actual decisions, not open options.
 
 ---
 
+## Where the build ended up differing (October 2026)
+
+The decisions below are kept as originally written. These are the places
+where the code that shipped went another way:
+
+| Decision below | What's actually in the code |
+|---|---|
+| React 18 | React 19, Vite 8, React Router 7, Tailwind CSS v4 |
+| shadcn/ui primitives | A custom component set in `frontend/src/shared/design-system/` (no Radix/shadcn) |
+| ECharts | Hand-rolled SVG chart components; no chart library |
+| Big Shoulders Display + IBM Plex Sans/Mono | Plus Jakarta Sans + JetBrains Mono, self-hosted variable fonts |
+| pgx + **sqlc** | pgx with hand-written queries. sqlc's CLI couldn't be installed on the original dev machine; `db/queries/*.sql` + `sqlc.yaml` are kept so it can be adopted later |
+| DuckDB for ad-hoc SQL over Parquet | The SQL Editor runs read-only queries against **Postgres** (Gold + feature + job tables). DuckDB over the lake is still open |
+| `air` hot-reload | Not set up; `go run ./cmd/server` |
+| Spec-first OpenAPI → `openapi-typescript` | Not done; frontend types are written by hand per domain |
+| Python worker wraps the existing scripts unchanged | The worker has its **own copy** of the pipeline code (`worker/`), adapted from `etl-exposure/`; nothing imports from `etl-exposure/` |
+| Go control-plane serves the React build | Not yet; in compose the frontend runs its own Vite dev server on :5173 |
+| *(not covered below)* Observability | Prometheus + Grafana, with the official Go client (`internal/metrics`) plus Postgres/Redis/Kafka exporters and MinIO's built-in metrics |
+| *(not covered below)* Object storage image | `pgsty/minio` / `pgsty/mc` community builds, since MinIO stopped publishing public images |
+
+---
+
 ## Decision: two-language backend
 
 The existing data/ML pipeline (ingestion, Silver, Gold, feature store, ML

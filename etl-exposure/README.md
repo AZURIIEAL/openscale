@@ -1,4 +1,12 @@
-# OpenScale
+# OpenScale (original standalone pipeline)
+
+> **Legacy / reference code.** This is the standalone taxi pipeline
+> OpenScale grew out of. The platform at the repo root (`frontend/`,
+> `control-plane/`, `worker/`) has its own copy of this logic and doesn't
+> import anything from here. To run OpenScale, follow the
+> [root README](../README.md), and don't run this folder's
+> `docker-compose.yml` at the same time, since both use the same
+> container names. This README is kept as written, for history.
 
 A miniature urban-mobility data platform built on the [NYC TLC Yellow Taxi Trip Record dataset](https://www.nyc.gov/site/tlc/about/tlc-trip-record-data.page). OpenScale isn't a taxi analytics dashboard — it's a working, end-to-end demonstration of the systems a real data platform team builds: a Medallion lakehouse, streaming replay, a feature store, an ML model with experiment tracking, an API serving both, and metrics/dashboards watching all of it.
 
