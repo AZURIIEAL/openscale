@@ -46,6 +46,14 @@ type Run struct {
 	RowsProcessed *int64 `json:"rowsProcessed,omitempty"`
 }
 
+// StatusCount is how many runs of one job type sit in one status --
+// exported as the openscale_job_runs gauge by internal/metrics.
+type StatusCount struct {
+	JobType string
+	Status  Status
+	Count   int64
+}
+
 // Definition describes one triggerable job type, shown in the frontend's
 // job catalog. Kept as a small hardcoded list (mirrors watchedServices in
 // internal/api/health_handler.go) rather than a database table -- this is

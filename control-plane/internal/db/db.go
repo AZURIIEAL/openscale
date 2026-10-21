@@ -206,6 +206,28 @@ func (d *DB) GetJobRun(ctx context.Context, id string) (jobs.Run, error) {
 	return run, nil
 }
 
+// CountJobRunsByStatus groups every run by job type and status -- read on
+// each Prometheus scrape by internal/metrics.
+func (d *DB) CountJobRunsByStatus(ctx context.Context) ([]jobs.StatusCount, error) {
+	rows, err := d.pool.Query(ctx,
+		`SELECT job_type, status, count(*) FROM control_plane.job_runs GROUP BY job_type, status`,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("db: count job runs: %w", err)
+	}
+	defer rows.Close()
+
+	var counts []jobs.StatusCount
+	for rows.Next() {
+		var sc jobs.StatusCount
+		if err := rows.Scan(&sc.JobType, &sc.Status, &sc.Count); err != nil {
+			return nil, fmt.Errorf("db: scan job run count: %w", err)
+		}
+		counts = append(counts, sc)
+	}
+	return counts, rows.Err()
+}
+
 // MarkFailed transitions a run straight to failed -- used when enqueuing
 // onto Redis fails right after the row was inserted, so the row doesn't
 // keep lying about being queued.

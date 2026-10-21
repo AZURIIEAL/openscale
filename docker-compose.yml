@@ -2,7 +2,10 @@ name: openscale
 
 services:
   minio:
-    image: minio/minio:latest
+    # minio/minio is no longer published on Docker Hub or Quay -- pgsty/minio
+    # is the community-maintained build of the same server (mc included, so
+    # the healthcheck below still works).
+    image: pgsty/minio:latest
     container_name: openscale-minio
     ports:
       - "9000:9000" # S3 API
@@ -12,6 +15,8 @@ services:
       # localhost-only container.
       MINIO_ROOT_USER: minioadmin
       MINIO_ROOT_PASSWORD: minioadmin
+      # Lets Prometheus scrape /minio/v2/metrics/* without a bearer token.
+      MINIO_PROMETHEUS_AUTH_TYPE: public
     volumes:
       - minio-data:/data
     command: server /data --console-address ":9001"
@@ -22,7 +27,7 @@ services:
       retries: 5
 
   minio-init:
-    image: minio/mc:latest
+    image: pgsty/mc:latest
     container_name: openscale-minio-init
     depends_on:
       minio:
@@ -104,10 +109,35 @@ services:
       - "9090:9090"
     volumes:
       - ./observability/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
-    extra_hosts:
-      # host.docker.internal is automatic on Docker Desktop; explicit for
-      # portability to a Linux host.
-      - "host.docker.internal:host-gateway"
+      - prometheus-data:/prometheus
+
+  # Exporters -- translate each backend's own stats into Prometheus metrics.
+  # In-network only (no host ports): Prometheus is their only reader.
+  postgres-exporter:
+    image: prometheuscommunity/postgres-exporter:v0.18.1
+    container_name: openscale-postgres-exporter
+    environment:
+      DATA_SOURCE_NAME: "postgresql://openscale:openscale@postgres:5432/openscale?sslmode=disable"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  redis-exporter:
+    image: oliver006/redis_exporter:v1.80.0
+    container_name: openscale-redis-exporter
+    environment:
+      REDIS_ADDR: "redis://redis:6379"
+    depends_on:
+      - redis
+
+  kafka-exporter:
+    image: danielqsj/kafka-exporter:v1.9.0
+    container_name: openscale-kafka-exporter
+    command: ["--kafka.server=kafka:9092"]
+    # Exits if Kafka isn't accepting connections yet at startup.
+    restart: unless-stopped
+    depends_on:
+      - kafka
 
   grafana:
     image: grafana/grafana:latest
@@ -129,6 +159,7 @@ services:
   control-plane:
     build:
       context: ./control-plane
+      network: host
     container_name: openscale-control-plane
     ports:
       - "8080:8080" # HTTP API, called by the frontend at VITE_API_BASE_URL
@@ -162,6 +193,7 @@ services:
   frontend:
     build:
       context: ./frontend
+      network: host
     container_name: openscale-frontend
     ports:
       - "5173:5173" # Vite dev server -- the only port meant to be reached directly by a person's browser
@@ -185,6 +217,7 @@ services:
   worker:
     build:
       context: ./worker
+      network: host
     container_name: openscale-worker
     environment:
       REDIS_ADDR: "redis:6379"
@@ -227,6 +260,7 @@ services:
   jupyter:
     build:
       context: ./jupyter
+      network: host
     container_name: openscale-jupyter
     ports:
       - "8888:8888"
@@ -246,6 +280,7 @@ services:
     # to, so nothing needs migrating.
     build:
       context: ./worker
+      network: host
     container_name: openscale-mlflow
     entrypoint: ["mlflow"]
     command:
@@ -287,3 +322,5 @@ volumes:
     name: openscale_redis-data
   grafana-data:
     name: openscale_grafana-data
+  prometheus-data:
+    name: openscale_prometheus-data

@@ -1,9 +1,37 @@
 global:
-  scrape_interval: 5s
+  scrape_interval: 15s
 
+# Every target is a compose service name on the shared "openscale" network.
 scrape_configs:
-  - job_name: openscale-api
+  - job_name: prometheus
     static_configs:
-      # The FastAPI app runs on the host (uvicorn), not in a container --
-      # host.docker.internal resolves back to the host from inside Docker.
-      - targets: ["host.docker.internal:8000"]
+      - targets: ["localhost:9090"]
+
+  # Go control-plane: HTTP request rate/latency per route, Go runtime, and
+  # openscale_job_runs (job_runs counts by type/status, read from Postgres).
+  - job_name: control-plane
+    static_configs:
+      - targets: ["control-plane:8080"]
+
+  - job_name: postgres
+    static_configs:
+      - targets: ["postgres-exporter:9187"]
+
+  - job_name: redis
+    static_configs:
+      - targets: ["redis-exporter:9121"]
+
+  - job_name: kafka
+    static_configs:
+      - targets: ["kafka-exporter:9308"]
+
+  # MinIO's built-in endpoints -- public via MINIO_PROMETHEUS_AUTH_TYPE.
+  - job_name: minio
+    metrics_path: /minio/v2/metrics/cluster
+    static_configs:
+      - targets: ["minio:9000"]
+
+  - job_name: minio-bucket
+    metrics_path: /minio/v2/metrics/bucket
+    static_configs:
+      - targets: ["minio:9000"]

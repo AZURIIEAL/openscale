@@ -19,6 +19,7 @@ import (
 	"github.com/AZURIIEAL/openscale/control-plane/internal/db"
 	"github.com/AZURIIEAL/openscale/control-plane/internal/docker"
 	"github.com/AZURIIEAL/openscale/control-plane/internal/lake"
+	"github.com/AZURIIEAL/openscale/control-plane/internal/metrics"
 	"github.com/AZURIIEAL/openscale/control-plane/internal/redis"
 	"github.com/AZURIIEAL/openscale/control-plane/internal/streaming"
 	"github.com/AZURIIEAL/openscale/control-plane/internal/ws"
@@ -75,7 +76,9 @@ func main() {
 		logger.Fatal().Err(err).Msg("failed to build MinIO client")
 	}
 
-	router := api.NewRouter(watcher, database, redisClient, wsHandler, streamingClient, streamHub, lakeClient, cfg.FrontendOrigin)
+	m := metrics.New(database)
+
+	router := api.NewRouter(watcher, database, redisClient, wsHandler, streamingClient, streamHub, lakeClient, m, cfg.FrontendOrigin)
 
 	srv := &http.Server{
 		Addr:              ":" + cfg.Port,

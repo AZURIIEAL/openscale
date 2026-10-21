@@ -12,6 +12,7 @@ import (
 	"github.com/AZURIIEAL/openscale/control-plane/internal/db"
 	"github.com/AZURIIEAL/openscale/control-plane/internal/docker"
 	"github.com/AZURIIEAL/openscale/control-plane/internal/lake"
+	"github.com/AZURIIEAL/openscale/control-plane/internal/metrics"
 	"github.com/AZURIIEAL/openscale/control-plane/internal/redis"
 	"github.com/AZURIIEAL/openscale/control-plane/internal/streaming"
 	"github.com/AZURIIEAL/openscale/control-plane/internal/ws"
@@ -26,12 +27,14 @@ func NewRouter(
 	streamingClient *streaming.Client,
 	streamHub *streaming.StreamHub,
 	lakeClient *lake.Client,
+	m *metrics.Metrics,
 	frontendOrigin string,
 ) http.Handler {
 	r := chi.NewRouter()
 
 	r.Use(middleware.RequestID)
 	r.Use(middleware.RealIP)
+	r.Use(m.Middleware)
 	r.Use(middleware.Recoverer)
 	r.Use(cors.Handler(cors.Options{
 		AllowedOrigins:   []string{frontendOrigin},
@@ -45,6 +48,7 @@ func NewRouter(
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte("ok"))
 	})
+	r.Handle("/metrics", m.Handler())
 
 	healthHandler := NewHealthHandler(watcher)
 	actionHandler := NewContainerActionHandler(watcher)
