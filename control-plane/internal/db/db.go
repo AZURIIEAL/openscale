@@ -45,12 +45,12 @@ func New(pool *pgxpool.Pool) *DB {
 // id is cast to text explicitly rather than relying on pgx's implicit
 // uuid->string scan support, which varies by version -- this guarantees a
 // plain string lands in jobs.Run.ID regardless.
-const runColumns = `id::text, job_type, params, status, submitted_at, started_at, finished_at, error, log_output, rows_processed`
+const runColumns = `id::text, project_id::text, job_type, params, status, submitted_at, started_at, finished_at, error, log_output, rows_processed`
 
 func scanRun(row pgx.Row) (jobs.Run, error) {
 	var run jobs.Run
 	err := row.Scan(
-		&run.ID, &run.JobType, &run.Params, &run.Status, &run.SubmittedAt,
+		&run.ID, &run.ProjectID, &run.JobType, &run.Params, &run.Status, &run.SubmittedAt,
 		&run.StartedAt, &run.FinishedAt, &run.Error, &run.LogOutput, &run.RowsProcessed,
 	)
 	return run, err
@@ -59,10 +59,10 @@ func scanRun(row pgx.Row) (jobs.Run, error) {
 // InsertJobRun creates a new queued run and returns it (with its
 // Postgres-generated ID) -- called before enqueuing onto Redis, so a
 // job_id exists immediately even if the worker hasn't picked it up yet.
-func (d *DB) InsertJobRun(ctx context.Context, jobType string, params []byte) (jobs.Run, error) {
+func (d *DB) InsertJobRun(ctx context.Context, projectID, jobType string, params []byte) (jobs.Run, error) {
 	row := d.pool.QueryRow(ctx,
-		`INSERT INTO control_plane.job_runs (job_type, params) VALUES ($1, $2) RETURNING `+runColumns,
-		jobType, params,
+		`INSERT INTO control_plane.job_runs (project_id, job_type, params) VALUES ($1::uuid, $2, $3) RETURNING `+runColumns,
+		projectID, jobType, params,
 	)
 	run, err := scanRun(row)
 	if err != nil {
@@ -71,13 +71,15 @@ func (d *DB) InsertJobRun(ctx context.Context, jobType string, params []byte) (j
 	return run, nil
 }
 
-// ListJobRuns returns up to `limit` runs starting at `offset`, newest first,
-// plus whether more rows exist beyond this page. It fetches limit+1 rows and
-// trims the extra one rather than running a separate COUNT query.
-func (d *DB) ListJobRuns(ctx context.Context, limit, offset int) ([]jobs.Run, bool, error) {
+// ListJobRuns returns up to `limit` of one project's runs starting at
+// `offset`, newest first, plus whether more rows exist beyond this page. It
+// fetches limit+1 rows and trims the extra one rather than running a
+// separate COUNT query.
+func (d *DB) ListJobRuns(ctx context.Context, projectID string, limit, offset int) ([]jobs.Run, bool, error) {
 	rows, err := d.pool.Query(ctx,
-		`SELECT `+runColumns+` FROM control_plane.job_runs ORDER BY submitted_at DESC LIMIT $1 OFFSET $2`,
-		limit+1, offset,
+		`SELECT `+runColumns+` FROM control_plane.job_runs
+		 WHERE project_id = $1::uuid ORDER BY submitted_at DESC LIMIT $2 OFFSET $3`,
+		projectID, limit+1, offset,
 	)
 	if err != nil {
 		return nil, false, fmt.Errorf("db: list job runs: %w", err)
@@ -103,12 +105,13 @@ func (d *DB) ListJobRuns(ctx context.Context, limit, offset int) ([]jobs.Run, bo
 	return runs, hasMore, nil
 }
 
-// ClearTerminalRuns deletes every run that isn't currently queued or
-// running, so "clear history" can't make an in-flight job's row vanish out
-// from under its live log panel.
-func (d *DB) ClearTerminalRuns(ctx context.Context) error {
+// ClearTerminalRuns deletes every run of one project that isn't currently
+// queued or running, so "clear history" can't make an in-flight job's row
+// vanish out from under its live log panel.
+func (d *DB) ClearTerminalRuns(ctx context.Context, projectID string) error {
 	_, err := d.pool.Exec(ctx,
-		`DELETE FROM control_plane.job_runs WHERE status NOT IN ('queued', 'running')`,
+		`DELETE FROM control_plane.job_runs WHERE project_id = $1::uuid AND status NOT IN ('queued', 'running')`,
+		projectID,
 	)
 	if err != nil {
 		return fmt.Errorf("db: clear terminal runs: %w", err)
@@ -126,12 +129,13 @@ type CancelledRun struct {
 	WasRunning bool
 }
 
-// CancelActiveRuns transitions every queued or running run straight to
-// cancelled. RETURNING only ever reflects the row's *post*-update state, so
+// CancelActiveRuns transitions every queued or running run of one project
+// straight to cancelled. Scoping by project matters for the caller's
+// worker-restart decision: a running job in another project is left alone. RETURNING only ever reflects the row's *post*-update state, so
 // this reads the pre-update status first (locking the rows with FOR UPDATE
 // against a concurrent worker mark_running/mark_terminal) and updates by id,
 // all inside one transaction.
-func (d *DB) CancelActiveRuns(ctx context.Context) ([]CancelledRun, error) {
+func (d *DB) CancelActiveRuns(ctx context.Context, projectID string) ([]CancelledRun, error) {
 	tx, err := d.pool.Begin(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("db: cancel active runs: begin: %w", err)
@@ -139,7 +143,9 @@ func (d *DB) CancelActiveRuns(ctx context.Context) ([]CancelledRun, error) {
 	defer tx.Rollback(ctx)
 
 	rows, err := tx.Query(ctx,
-		`SELECT id::text, status FROM control_plane.job_runs WHERE status IN ('queued', 'running') FOR UPDATE`,
+		`SELECT id::text, status FROM control_plane.job_runs
+		 WHERE project_id = $1::uuid AND status IN ('queued', 'running') FOR UPDATE`,
+		projectID,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("db: cancel active runs: select active: %w", err)

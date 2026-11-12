@@ -51,7 +51,9 @@ docker compose ps                     # every service should be running
 docker compose logs -f control-plane  # wait for "control-plane listening"
 ```
 
-Open **http://localhost:5173**.
+Open **http://localhost:5173**. You land in the **NYC Taxi** sample
+project; the project switcher in the top bar creates and switches
+projects (every project screen is `/p/{slug}/...`).
 
 > If the build fails with `pip`/`npm`/`go` timeouts or DNS errors, your
 > network doesn't get along with Docker's build network. Run
@@ -127,8 +129,11 @@ embedded real service, not mock data. The caveats are the real limits.
 | **Settings** | Theme, accent, chart style and 12 interface skins, saved to Postgres | |
 | **Search (⌘K / Ctrl+K)** | Live search across screens, job types, Postgres tables and recent runs; picking a result opens that item directly | |
 
-**Not built yet:** generic connectors, a config-driven pipeline builder,
-scheduling, and auth. See [`ideas/vision-and-roadmap.md`](ideas/vision-and-roadmap.md).
+| **Projects** | Create, switch and archive projects; job history is per project; `/` remembers the last one | Datasets, queries and dashboards are not per project yet, so Pipelines, Dashboards and Streaming only light up in the `nyc-taxi` sample |
+
+**Not built yet:** per-project datasets (upload / URL ingest), DuckDB over
+the lake, generic connectors, a config-driven pipeline builder, scheduling,
+the assistant, and auth. See [`ideas/vision-and-roadmap.md`](ideas/vision-and-roadmap.md).
 
 ## Architecture
 
@@ -153,8 +158,8 @@ and no other package imports that backend's SDK.
 Spark itself. It records the run and enqueues it:
 
 ```
-POST /api/jobs/{type}/run
-  └─▶ control-plane: INSERT job_runs (queued) ─▶ XADD openscale:jobs:requests
+POST /api/projects/{p}/jobs/{type}/run
+  └─▶ control-plane: INSERT job_runs (queued, project_id) ─▶ XADD openscale:jobs:requests
                                                         │
                           worker (Python/PySpark) ◀─────┘ XREADGROUP
                             ├─ writes Bronze/Silver/Gold Parquet ─▶ MinIO
@@ -239,6 +244,13 @@ Two lists are kept in sync by hand:
   (which leaves out `replay` and `reset` on purpose).
 - **Routes**: [frontend/src/app/router.tsx](frontend/src/app/router.tsx) and
   [frontend/src/shared/layout/navigation.ts](frontend/src/shared/layout/navigation.ts).
+
+Tests run in CI ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)):
+`go test ./...` in `control-plane`, `python -m pytest` in `worker`, and
+`npm test` (vitest) plus `tsc -b` in `frontend`. The Silver rule set also
+has a golden check against the original pipeline's quality reports:
+`cd worker && python scripts/golden_check.py 2024-07` (needs that month's
+raw Parquet under `worker/data/raw/yellow_taxi/`).
 
 ## Troubleshooting
 

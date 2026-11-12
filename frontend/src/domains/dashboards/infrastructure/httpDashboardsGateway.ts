@@ -1,4 +1,5 @@
 import { apiGet } from '@/shared/api/httpClient';
+import { projectApiPath } from '@/shared/project/rules';
 import type { DashboardsGateway } from '../application/DashboardsGateway';
 import type { DashboardsOverview } from '../domain/entities';
 
@@ -6,7 +7,7 @@ import type { DashboardsOverview } from '../domain/entities';
 // field-for-field (see internal/api/dashboards_handler.go) -- no
 // wire-vs-domain renaming needed here, unlike pipelines' apiMapping.
 export const httpDashboardsGateway: DashboardsGateway = {
-  async fetchOverview() {
-    return apiGet<DashboardsOverview>('/api/dashboards/overview');
+  async fetchOverview(projectSlug) {
+    return apiGet<DashboardsOverview>(projectApiPath(projectSlug, 'dashboards/overview'));
   },
 };

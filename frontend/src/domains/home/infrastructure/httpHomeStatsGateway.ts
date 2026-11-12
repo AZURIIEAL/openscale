@@ -1,4 +1,5 @@
 import { apiGet } from '@/shared/api/httpClient';
+import { projectApiPath } from '@/shared/project/rules';
 import type { DailyRevenuePoint } from '@/domains/dashboards/domain/entities';
 
 // Wire shape from control-plane's internal/api/dashboards_handler.go
@@ -12,6 +13,6 @@ export interface ApiHomeStats {
   revenueTrend14d: DailyRevenuePoint[];
 }
 
-export function fetchHomeStats(): Promise<ApiHomeStats> {
-  return apiGet<ApiHomeStats>('/api/home/stats');
+export function fetchHomeStats(projectSlug: string): Promise<ApiHomeStats> {
+  return apiGet<ApiHomeStats>(projectApiPath(projectSlug, 'home/stats'));
 }

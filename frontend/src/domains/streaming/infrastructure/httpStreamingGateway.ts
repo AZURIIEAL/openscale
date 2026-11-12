@@ -77,15 +77,15 @@ export const httpStreamingGateway: StreamingGateway = {
   },
 
   // Reuses the pipelines domain's generic job-trigger gateway directly
-  // (POST /api/jobs/{type}/run has no pipelines-specific coupling) rather
+  // (POST /api/projects/{p}/jobs/{type}/run has no pipelines-specific coupling) rather
   // than duplicating apiPost + JobRun mapping here.
-  async startReplay(params) {
+  async startReplay(projectSlug, params) {
     const body: Record<string, string> = {
       limit: String(params.limit),
       messagesPerSecond: String(params.messagesPerSecond),
     };
     if (params.date) body.date = params.date;
-    return httpJobControlGateway.triggerRun('replay', body);
+    return httpJobControlGateway.triggerRun(projectSlug, 'replay', body);
   },
 
   // The user may load this screen before Kafka/any replay has ever run, or

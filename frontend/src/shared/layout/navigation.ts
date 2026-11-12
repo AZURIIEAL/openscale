@@ -11,16 +11,21 @@ import {
   ConnectionsIcon,
 } from '@/shared/design-system';
 import type { LucideIcon } from 'lucide-react';
+import { parseProjectPath, projectPath } from '@/shared/project/rules';
+
+export type NavScope = 'project' | 'system';
 
 export interface NavEntry {
+  /** For `project` entries: the segment after `/p/{slug}` ('' is Home).
+   * For `system` entries: the absolute path. Use navHref() to resolve. */
   path: string;
   label: string;
   icon: LucideIcon;
   /** One-line copy shown under the screen title in the top bar. */
   subtitle: string;
-  /** Groups the "System" section (Infrastructure, Connections) apart from
-   * the primary workflow screens in the sidebar. */
-  group?: 'system';
+  /** Project screens live under /p/{slug}; system screens (Infrastructure,
+   * Settings) describe the whole stack and sit outside any project. */
+  scope: NavScope;
 }
 
 /**
@@ -29,56 +34,80 @@ export interface NavEntry {
  * this instead of maintaining three parallel lists.
  */
 export const NAV_ENTRIES: NavEntry[] = [
-  { path: '/', label: 'Home', icon: HomeIcon, subtitle: 'Nine services, one pipeline chain, live container load.' },
+  { path: '', label: 'Home', icon: HomeIcon, subtitle: 'Project health at a glance: recent runs, stats and live container load.', scope: 'project' },
   {
-    path: '/pipelines',
+    path: 'pipelines',
     label: 'Pipelines',
     icon: PipelinesIcon,
-    subtitle: 'Bronze through model training, run by hand or on a chain.',
+    subtitle: 'Run jobs by hand or on a chain, with live status and logs.',
+    scope: 'project',
   },
   {
-    path: '/sql-editor',
+    path: 'sql-editor',
     label: 'SQL Editor',
     icon: SqlEditorIcon,
     subtitle: 'Read-only SQL against Postgres. Lake queries coming later.',
+    scope: 'project',
   },
   {
-    path: '/data-catalog',
+    path: 'data-catalog',
     label: 'Data Catalog',
     icon: DataCatalogIcon,
     subtitle: 'Postgres schema, the MinIO lake, and real pipeline lineage.',
+    scope: 'project',
   },
-  { path: '/notebooks', label: 'Notebooks', icon: NotebooksIcon, subtitle: 'JupyterLab, opened on the example notebooks.' },
+  { path: 'notebooks', label: 'Notebooks', icon: NotebooksIcon, subtitle: 'JupyterLab, opened on the example notebooks.', scope: 'project' },
   {
-    path: '/ml-workbench',
+    path: 'ml-workbench',
     label: 'ML Workbench',
     icon: MlWorkbenchIcon,
     subtitle: 'MLflow experiments and models from the train job.',
+    scope: 'project',
   },
   {
-    path: '/streaming',
+    path: 'streaming',
     label: 'Streaming',
     icon: StreamingIcon,
-    subtitle: 'Kafka replay of real Silver trips, streamed live over WebSocket.',
+    subtitle: 'Kafka replay of real rows, streamed live over WebSocket.',
+    scope: 'project',
   },
   {
-    path: '/dashboards',
+    path: 'dashboards',
     label: 'Dashboards',
     icon: DashboardsIcon,
-    subtitle: 'Gold-layer metrics over the full ingested history.',
+    subtitle: 'Metrics over the full ingested history.',
+    scope: 'project',
   },
   {
     path: '/infrastructure',
     label: 'Infrastructure',
     icon: InfrastructureIcon,
     subtitle: 'Container health, restart and stop controls.',
-    group: 'system',
+    scope: 'system',
   },
   {
     path: '/connections',
     label: 'Settings',
     icon: ConnectionsIcon,
     subtitle: 'Console appearance and interface preferences.',
-    group: 'system',
+    scope: 'system',
   },
 ];
+
+/** Resolves a nav entry to a browser path. Project entries need the
+ * current slug; with none known they fall back to `/`, which redirects to
+ * the last-used project. */
+export function navHref(entry: NavEntry, projectSlug: string | undefined): string {
+  if (entry.scope === 'system') return entry.path;
+  return projectSlug ? projectPath(projectSlug, entry.path) : '/';
+}
+
+/** Finds the nav entry a pathname is on, for the top bar's title. */
+export function findNavEntry(pathname: string): NavEntry | undefined {
+  const parsed = parseProjectPath(pathname);
+  if (parsed) {
+    const first = parsed.subpath.split('/')[0] ?? '';
+    return NAV_ENTRIES.find((e) => e.scope === 'project' && e.path === first);
+  }
+  return NAV_ENTRIES.find((e) => e.scope === 'system' && e.path === pathname);
+}

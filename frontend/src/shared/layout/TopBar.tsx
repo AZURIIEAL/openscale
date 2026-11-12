@@ -1,6 +1,7 @@
 import { useLocation } from 'react-router-dom';
 import { Bell, Menu } from 'lucide-react';
-import { NAV_ENTRIES } from './navigation';
+import { findNavEntry } from './navigation';
+import { ProjectSwitcher } from '@/shared/project/ProjectSwitcher';
 import { SearchBar } from './SearchBar';
 import { AccountMenu } from './AccountMenu';
 import { Badge } from '@/shared/design-system/Badge';
@@ -31,8 +32,8 @@ const STATUS_MESSAGE: Record<Status, string> = {
  */
 export function TopBar({ systemStatus, systemStatusLabel, onOpenMenu }: TopBarProps) {
   const { pathname } = useLocation();
-  const entry = NAV_ENTRIES.find((e) => e.path === pathname);
-  const title = entry?.label ?? 'OpenScale';
+  const entry = findNavEntry(pathname);
+  const title = entry?.label ?? (pathname === '/projects/new' ? 'New project' : 'OpenScale');
   const subtitle = entry?.subtitle ?? '';
 
   return (
@@ -60,6 +61,8 @@ export function TopBar({ systemStatus, systemStatusLabel, onOpenMenu }: TopBarPr
       </div>
 
       <div className="flex min-w-0 max-w-full flex-none items-center gap-2.5">
+        <ProjectSwitcher />
+
         <Badge tone={STATUS_TONE[systemStatus]} dot>
           <span title={systemStatusLabel}>{STATUS_MESSAGE[systemStatus]}</span>
         </Badge>

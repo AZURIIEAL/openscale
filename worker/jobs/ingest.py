@@ -8,6 +8,7 @@ from typing import Callable
 
 from ingestion.downloader.downloader import month_range
 from ingestion.run_ingestion import run as run_ingestion
+from jobs.outcome import IngestOutcome, format_exception
 
 
 def run(
@@ -25,35 +26,26 @@ def run(
       - every period failed         -> failed (nothing landed in Bronze)
       - a mix of OK and failed      -> partial
     An uncaught exception (a real crash, not an expected rejection) is
-    still an unconditional 'failed'.
+    still an unconditional 'failed'. The status rule itself lives in
+    jobs.outcome.IngestOutcome so it can be unit-tested.
     """
     start = params.get("start")
     end = params.get("end")
     periods = month_range(start, end) if start and end else None
 
     log_lines: list[str] = []
-    ok_count = 0
-    rows_processed = 0
-    failed_periods: list[str] = []
+    outcome = IngestOutcome()
     try:
         for result in run_ingestion(periods):
             line = str(result)
             log_lines.append(line)
             on_log_line(line)
-            if result.get("status") == "OK":
-                ok_count += 1
-                rows_processed += result.get("rows", 0)
-            else:
-                failed_periods.append(f"{result.get('period')}: {result.get('status')} ({result.get('reason')})")
+            outcome.add(result)
     except Exception as exc:
-        error = f"{type(exc).__name__}: {exc}"
+        error = format_exception(exc)
         log_lines.append(error)
         on_log_line(error)
-        return "failed", error, log_lines, rows_processed or None, None
+        return "failed", error, log_lines, outcome.rows_processed or None, None
 
-    if not failed_periods:
-        return "succeeded", None, log_lines, rows_processed, None
-    error = "; ".join(failed_periods)
-    if ok_count == 0:
-        return "failed", error, log_lines, None, None
-    return "partial", error, log_lines, rows_processed, None
+    status, error, rows_processed = outcome.finish()
+    return status, error, log_lines, rows_processed, None

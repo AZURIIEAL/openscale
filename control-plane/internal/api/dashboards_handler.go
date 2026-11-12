@@ -31,10 +31,13 @@ type DashboardsOverview struct {
 	EtlHealth    []db.JobTypeHealth     `json:"etlHealth"`
 }
 
-// Overview handles GET /api/dashboards/overview, composing every chart
-// tile's data into one payload so the frontend needs one query/loading
-// state instead of 6.
+// Overview handles GET /api/projects/{projectId}/dashboards/overview,
+// composing every chart tile's data into one payload so the frontend needs
+// one query/loading state instead of 6. The Gold tables are not yet
+// project-scoped (they are written to the public schema by the legacy taxi
+// jobs); the job_runs-derived tiles are.
 func (h *DashboardsHandler) Overview(w http.ResponseWriter, r *http.Request) {
+	project, _ := ProjectFromContext(r.Context())
 	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
 	defer cancel()
 
@@ -58,12 +61,12 @@ func (h *DashboardsHandler) Overview(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	modelMetrics, err := h.db.ListTrainMetrics(ctx)
+	modelMetrics, err := h.db.ListTrainMetrics(ctx, project.ID)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	etlHealth, err := h.db.ETLHealthSummary(ctx)
+	etlHealth, err := h.db.ETLHealthSummary(ctx, project.ID)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -87,23 +90,25 @@ type HomeStats struct {
 	RevenueTrend14d     []db.DailyRevenuePoint `json:"revenueTrend14d"`
 }
 
-// HomeStats handles GET /api/home/stats, backing Home's stat cards and
-// revenue sparkline with real numbers instead of mockHomeGateway's.
+// HomeStats handles GET /api/projects/{projectId}/home/stats, backing Home's
+// stat cards and revenue sparkline with real numbers instead of
+// mockHomeGateway's.
 func (h *DashboardsHandler) HomeStats(w http.ResponseWriter, r *http.Request) {
+	project, _ := ProjectFromContext(r.Context())
 	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
 	defer cancel()
 
-	silverRows, err := h.db.LatestSilverRowsProcessed(ctx)
+	silverRows, err := h.db.LatestSilverRowsProcessed(ctx, project.ID)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	monthsIngested, err := h.db.IngestedMonthsCount(ctx)
+	monthsIngested, err := h.db.IngestedMonthsCount(ctx, project.ID)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	fareModelMae, err := h.db.LatestFareModelMae(ctx)
+	fareModelMae, err := h.db.LatestFareModelMae(ctx, project.ID)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return

@@ -10,7 +10,7 @@ import type { KafkaTopic, ReplayParams, StreamFrame, ConnectionStatus } from '..
  */
 export interface StreamingGateway {
   listTopics(): Promise<{ topics: KafkaTopic[]; brokerReachable: boolean }>;
-  startReplay(params: ReplayParams): Promise<JobRun>;
+  startReplay(projectSlug: string, params: ReplayParams): Promise<JobRun>;
   /** Opens the live WebSocket feed. onFrame fires for every trip/window
    * frame; onStatusChange (optional) tracks the connection lifecycle for a
    * status indicator. Returns a cleanup function that closes the socket

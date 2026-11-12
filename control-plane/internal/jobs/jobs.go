@@ -29,9 +29,21 @@ const (
 	StatusCancelled Status = "cancelled"
 )
 
+// IsTerminal reports whether a run in status s will never change again.
+// Cancelled counts: a WebSocket tail opened on a cancelled run must close
+// instead of waiting forever for a status that will not come.
+func IsTerminal(s Status) bool {
+	switch s {
+	case StatusSucceeded, StatusPartial, StatusFailed, StatusCancelled:
+		return true
+	}
+	return false
+}
+
 // Run is one triggered job execution.
 type Run struct {
 	ID          string          `json:"id"`
+	ProjectID   string          `json:"projectId"`
 	JobType     string          `json:"jobType"`
 	Params      json.RawMessage `json:"params"`
 	Status      Status          `json:"status"`

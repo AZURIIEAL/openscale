@@ -6,5 +6,5 @@ import type { JobRun } from '../domain/entities';
  * can update immediately, same pattern as ServiceControlGateway.
  */
 export interface JobControlGateway {
-  triggerRun(jobType: string, params: Record<string, string>): Promise<JobRun>;
+  triggerRun(projectSlug: string, jobType: string, params: Record<string, string>): Promise<JobRun>;
 }

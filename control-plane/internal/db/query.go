@@ -19,7 +19,7 @@ type QueryResult struct {
 
 // RunReadOnlyQuery executes sql inside a read-only transaction so Postgres
 // itself rejects any write that slips past the handler's SELECT/WITH
-// prefix check (query_handler.go's validateReadOnlySQL) -- that check is
+// prefix check (internal/sqlcheck.ValidateReadOnly) -- that check is
 // just fail-fast UX, this transaction is the actual safety net. Reads at
 // most maxRows rows, then stops and reports Truncated rather than
 // buffering an unbounded result set.

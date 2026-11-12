@@ -5,7 +5,7 @@ import { useGlobalSearch } from '@/shared/search/useGlobalSearch';
 import { CATEGORY_LABEL } from '@/shared/search/rules';
 import type { SearchCategory, SearchResultItem } from '@/shared/search/entities';
 
-const CATEGORY_ORDER: SearchCategory[] = ['screen', 'job', 'table', 'run'];
+const CATEGORY_ORDER: SearchCategory[] = ['project', 'screen', 'job', 'table', 'run'];
 
 /**
  * The top bar's search field, plus its results dropdown -- real navigation,

@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
+import { useCurrentProject } from '@/shared/project/useCurrentProject';
 import { mockHomeGateway } from '../infrastructure/mockHomeGateway';
 import { httpJobsGateway } from '@/domains/pipelines/infrastructure/httpJobsGateway';
 import { fetchHomeStats, type ApiHomeStats } from '../infrastructure/httpHomeStatsGateway';
@@ -72,13 +73,15 @@ function toRevenueTrend(stats: ApiHomeStats, fallback: RevenueTrend): RevenueTre
  * overview now, same graceful-fallback pattern already used for runs.
  */
 export function useHomeOverview() {
+  const { slug } = useCurrentProject();
   return useQuery({
-    queryKey: ['home', 'overview'],
+    queryKey: ['home', slug, 'overview'],
+    enabled: slug !== '',
     queryFn: async (): Promise<HomeOverview> => {
       const [overview, page, homeStats] = await Promise.all([
         gateway.fetchOverview(),
-        httpJobsGateway.fetchRuns({ limit: 5, offset: 0 }).catch(() => ({ runs: [] as JobRun[], hasMore: false })),
-        fetchHomeStats().catch(() => null as ApiHomeStats | null),
+        httpJobsGateway.fetchRuns(slug, { limit: 5, offset: 0 }).catch(() => ({ runs: [] as JobRun[], hasMore: false })),
+        fetchHomeStats(slug).catch(() => null as ApiHomeStats | null),
       ]);
       return {
         ...overview,

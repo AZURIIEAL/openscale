@@ -33,12 +33,13 @@ func NewJobsHandler(database *db.DB, redisClient *redis.Client, watcher *docker.
 	return &JobsHandler{db: database, redis: redisClient, watcher: watcher}
 }
 
-// Run handles POST /api/jobs/{type}/run. It inserts the queued row first
+// Run handles POST /api/projects/{projectId}/jobs/{type}/run. It inserts the queued row first
 // (so a job_id exists immediately, even if enqueuing or the worker is
 // briefly unavailable) and only then enqueues onto Redis -- if enqueuing
 // fails, the row is marked failed right away rather than left lying about
 // being queued.
 func (h *JobsHandler) Run(w http.ResponseWriter, r *http.Request) {
+	project, _ := ProjectFromContext(r.Context())
 	jobType := chi.URLParam(r, "type")
 	if !jobs.IsKnownJobType(jobType) {
 		http.Error(w, "unknown job type", http.StatusNotFound)
@@ -57,7 +58,7 @@ func (h *JobsHandler) Run(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 	defer cancel()
 
-	run, err := h.db.InsertJobRun(ctx, jobType, params)
+	run, err := h.db.InsertJobRun(ctx, project.ID, jobType, params)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -72,6 +73,7 @@ func (h *JobsHandler) Run(w http.ResponseWriter, r *http.Request) {
 		paramsMap = map[string]any{}
 	}
 	paramsMap["job_id"] = run.ID
+	paramsMap["project_id"] = run.ProjectID
 	enqueueParams, err := json.Marshal(paramsMap)
 	if err != nil {
 		errMsg := "failed to encode enqueue params: " + err.Error()
@@ -109,7 +111,7 @@ type ListRunsResponse struct {
 	HasMore bool       `json:"hasMore"`
 }
 
-// ListRuns handles GET /api/jobs/runs?limit=10&offset=0.
+// ListRuns handles GET /api/projects/{projectId}/jobs/runs?limit=10&offset=0.
 func (h *JobsHandler) ListRuns(w http.ResponseWriter, r *http.Request) {
 	limit := 20
 	if v := r.URL.Query().Get("limit"); v != "" {
@@ -127,7 +129,8 @@ func (h *JobsHandler) ListRuns(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 	defer cancel()
 
-	runs, hasMore, err := h.db.ListJobRuns(ctx, limit, offset)
+	project, _ := ProjectFromContext(r.Context())
+	runs, hasMore, err := h.db.ListJobRuns(ctx, project.ID, limit, offset)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -137,14 +140,15 @@ func (h *JobsHandler) ListRuns(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(ListRunsResponse{Runs: runs, HasMore: hasMore})
 }
 
-// ClearRuns handles DELETE /api/jobs/runs, removing every terminal run so
+// ClearRuns handles DELETE /api/projects/{projectId}/jobs/runs, removing every terminal run so
 // the history table can be reset. In-flight (queued/running) rows are left
 // alone -- see db.ClearTerminalRuns.
 func (h *JobsHandler) ClearRuns(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 	defer cancel()
 
-	if err := h.db.ClearTerminalRuns(ctx); err != nil {
+	project, _ := ProjectFromContext(r.Context())
+	if err := h.db.ClearTerminalRuns(ctx, project.ID); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -156,18 +160,21 @@ type CancelAllResponse struct {
 	Cancelled []jobs.Run `json:"cancelled"`
 }
 
-// CancelAll handles POST /api/jobs/cancel-all. Queued runs are cooperatively
+// CancelAll handles POST /api/projects/{projectId}/jobs/cancel-all. Queued runs are cooperatively
 // cancelled (the worker checks each run's status before executing it and
 // skips ones already marked cancelled, see worker/db.py's mark_running).
 // A running run has no such interrupt point -- the worker runs a single
 // synchronous Spark call per job with nothing polling for a cancel signal --
 // so the only way to actually stop it is to restart the worker container,
 // same Docker action the Infrastructure screen already exposes per-service.
+// Only this project's runs are cancelled, so the restart happens only when
+// the job currently occupying the worker belongs to this project.
 func (h *JobsHandler) CancelAll(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 20*time.Second)
 	defer cancel()
 
-	cancelled, err := h.db.CancelActiveRuns(ctx)
+	project, _ := ProjectFromContext(r.Context())
+	cancelled, err := h.db.CancelActiveRuns(ctx, project.ID)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -210,7 +217,7 @@ type controlRequest struct {
 // clamped, since a bogus value here almost certainly means a frontend bug.
 var validSpeedMultipliers = map[float64]bool{1: true, 2: true, 3: true, 5: true, 10: true}
 
-// Control handles POST /api/jobs/{id}/control -- a live command into a
+// Control handles POST /api/projects/{projectId}/jobs/{id}/control -- a live command into a
 // running job's Redis control hash (openscale:jobs:{id}:control), currently
 // only meaningful to the `replay` job's send loop (worker/jobs/replay.py).
 // This deliberately doesn't check the run's current DB status first: the

@@ -1,6 +1,9 @@
 import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { NAV_ENTRIES } from '@/shared/layout/navigation';
+import { NAV_ENTRIES, navHref } from '@/shared/layout/navigation';
+import { useCurrentProject } from '@/shared/project/useCurrentProject';
+import { useProjectsList } from '@/shared/project/useProjects';
+import { projectPath } from '@/shared/project/rules';
 import { JOB_CATALOG } from '@/domains/pipelines/domain/entities';
 import { stateLabel, formatRunTime } from '@/domains/pipelines/domain/rules';
 import { httpJobsGateway } from '@/domains/pipelines/infrastructure/httpJobsGateway';
@@ -9,19 +12,22 @@ import { quotedTableRef } from '@/domains/data-catalog/domain/rules';
 import { matchesQuery, MAX_RESULTS_PER_CATEGORY } from './rules';
 import type { SearchResults } from './entities';
 
-const EMPTY_RESULTS: SearchResults = { screen: [], job: [], table: [], run: [] };
+const EMPTY_RESULTS: SearchResults = { project: [], screen: [], job: [], table: [], run: [] };
 
 /**
  * Search across everything this app already knows about, real data only:
- * the static screen/job catalogs (no fetch needed) plus the SQL Editor's
- * table catalog and Pipelines' run history (both existing endpoints,
- * reused as-is -- same cross-domain reuse precedent as Streaming importing
- * Pipelines' useJobRunEvents). The two network-backed categories only fetch
- * once the search bar actually has focus, not on every page load.
+ * the project list and static screen/job catalogs (no extra fetch), plus
+ * the SQL Editor's table catalog and the current project's run history
+ * (both existing endpoints, reused as-is). Screen, job and run results
+ * open inside the current project; with no project in the URL they fall
+ * back to `/` and its last-used redirect. The two network-backed
+ * categories only fetch once the search bar actually has focus.
  */
 export function useGlobalSearch(query: string, enabled: boolean): { results: SearchResults; isLoading: boolean; total: number } {
   const trimmed = query.trim();
   const active = enabled && trimmed.length > 0;
+  const { slug } = useCurrentProject();
+  const { data: projects } = useProjectsList();
 
   const catalogQuery = useQuery({
     queryKey: ['search', 'catalog'],
@@ -31,18 +37,24 @@ export function useGlobalSearch(query: string, enabled: boolean): { results: Sea
   });
 
   const runsQuery = useQuery({
-    queryKey: ['search', 'runs'],
-    queryFn: () => httpJobsGateway.fetchRuns({ limit: 50, offset: 0 }),
-    enabled,
+    queryKey: ['search', slug, 'runs'],
+    queryFn: () => httpJobsGateway.fetchRuns(slug, { limit: 50, offset: 0 }),
+    enabled: enabled && slug !== '',
     staleTime: 30 * 1000,
   });
 
   const results = useMemo<SearchResults>(() => {
     if (!active) return EMPTY_RESULTS;
+    const inProject = (subpath: string) => (slug ? projectPath(slug, subpath) : '/');
+
+    const project = (projects ?? [])
+      .filter((p) => matchesQuery(trimmed, p.name, p.slug, p.description))
+      .slice(0, MAX_RESULTS_PER_CATEGORY)
+      .map((p) => ({ id: `project:${p.slug}`, category: 'project' as const, title: p.name, subtitle: `/p/${p.slug}`, path: projectPath(p.slug) }));
 
     const screen = NAV_ENTRIES.filter((e) => matchesQuery(trimmed, e.label, e.subtitle))
       .slice(0, MAX_RESULTS_PER_CATEGORY)
-      .map((e) => ({ id: `screen:${e.path}`, category: 'screen' as const, title: e.label, subtitle: e.subtitle, path: e.path }));
+      .map((e) => ({ id: `screen:${e.path}`, category: 'screen' as const, title: e.label, subtitle: e.subtitle, path: navHref(e, slug || undefined) }));
 
     const job = JOB_CATALOG.filter((j) => matchesQuery(trimmed, j.label, j.type, j.stage, j.description))
       .slice(0, MAX_RESULTS_PER_CATEGORY)
@@ -51,7 +63,7 @@ export function useGlobalSearch(query: string, enabled: boolean): { results: Sea
         category: 'job' as const,
         title: j.label,
         subtitle: j.description,
-        path: '/pipelines',
+        path: inProject('pipelines'),
         navState: { openJobType: j.type },
       }));
 
@@ -63,7 +75,7 @@ export function useGlobalSearch(query: string, enabled: boolean): { results: Sea
         category: 'table' as const,
         title: `${t.schema}.${t.table}`,
         subtitle: `${t.columns.length} column${t.columns.length === 1 ? '' : 's'}`,
-        path: '/sql-editor',
+        path: inProject('sql-editor'),
         navState: { prefillSql: `select * from ${quotedTableRef(t.schema, t.table)} limit 20;` },
       }));
 
@@ -75,15 +87,15 @@ export function useGlobalSearch(query: string, enabled: boolean): { results: Sea
         category: 'run' as const,
         title: `${r.jobType} · ${stateLabel(r.state)}`,
         subtitle: formatRunTime(r.submittedAt),
-        path: '/pipelines',
+        path: inProject('pipelines'),
         navState: { selectedRunId: r.id },
       }));
 
-    return { screen, job, table, run };
-  }, [active, trimmed, catalogQuery.data, runsQuery.data]);
+    return { project, screen, job, table, run };
+  }, [active, trimmed, slug, projects, catalogQuery.data, runsQuery.data]);
 
   const isLoading = active && (catalogQuery.isFetching || runsQuery.isFetching);
-  const total = results.screen.length + results.job.length + results.table.length + results.run.length;
+  const total = results.project.length + results.screen.length + results.job.length + results.table.length + results.run.length;
 
   return { results, isLoading, total };
 }

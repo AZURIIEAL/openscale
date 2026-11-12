@@ -1,6 +1,6 @@
-import { NavLink } from 'react-router-dom';
+import { NavLink, useParams } from 'react-router-dom';
 import { X } from 'lucide-react';
-import { NAV_ENTRIES } from './navigation';
+import { NAV_ENTRIES, navHref, type NavEntry } from './navigation';
 import type { Status } from '@/shared/types/status';
 
 interface SidebarProps {
@@ -16,8 +16,8 @@ interface SidebarProps {
   onClose: () => void;
 }
 
-const primaryEntries = NAV_ENTRIES.filter((e) => e.group !== 'system');
-const systemEntries = NAV_ENTRIES.filter((e) => e.group === 'system');
+const primaryEntries = NAV_ENTRIES.filter((e) => e.scope === 'project');
+const systemEntries = NAV_ENTRIES.filter((e) => e.scope === 'system');
 
 const STATUS_DOT: Record<Status, string> = {
   good: 'var(--success)',
@@ -26,6 +26,10 @@ const STATUS_DOT: Record<Status, string> = {
 };
 
 export function Sidebar({ servicesUp, servicesTotal, overallStatus, isOpen, onClose }: SidebarProps) {
+  // The project slug comes from the matched /p/:projectSlug route (parent
+  // layouts see child params); undefined on system screens, where project
+  // links fall back to `/` and its last-used redirect.
+  const { projectSlug } = useParams<{ projectSlug: string }>();
   return (
     <>
       {isOpen && (
@@ -61,7 +65,7 @@ export function Sidebar({ servicesUp, servicesTotal, overallStatus, isOpen, onCl
 
         <nav aria-label="Primary" className="flex flex-col gap-1 overflow-y-auto">
           {primaryEntries.map((entry) => (
-            <NavItemLink key={entry.path} entry={entry} onNavigate={onClose} />
+            <NavItemLink key={entry.path} entry={entry} projectSlug={projectSlug} onNavigate={onClose} />
           ))}
         </nav>
 
@@ -70,7 +74,7 @@ export function Sidebar({ servicesUp, servicesTotal, overallStatus, isOpen, onCl
         </div>
         <nav aria-label="System" className="flex flex-col gap-1">
           {systemEntries.map((entry) => (
-            <NavItemLink key={entry.path} entry={entry} onNavigate={onClose} />
+            <NavItemLink key={entry.path} entry={entry} projectSlug={projectSlug} onNavigate={onClose} />
           ))}
         </nav>
 
@@ -93,11 +97,11 @@ export function Sidebar({ servicesUp, servicesTotal, overallStatus, isOpen, onCl
   );
 }
 
-function NavItemLink({ entry, onNavigate }: { entry: NavEntry; onNavigate: () => void }) {
+function NavItemLink({ entry, projectSlug, onNavigate }: { entry: NavEntry; projectSlug: string | undefined; onNavigate: () => void }) {
   return (
     <NavLink
-      to={entry.path}
-      end={entry.path === '/'}
+      to={navHref(entry, projectSlug)}
+      end={entry.path === ''}
       onClick={onNavigate}
       className="os-nav-item flex w-full items-center gap-2.5 rounded-full px-3 py-2.5 text-left text-[14px] font-semibold no-underline transition-transform"
       style={({ isActive }) => ({ color: isActive ? undefined : 'var(--text-body)' })}
@@ -114,7 +118,3 @@ function NavItemLink({ entry, onNavigate }: { entry: NavEntry; onNavigate: () =>
     </NavLink>
   );
 }
-
-// Re-declared here (not imported) to keep NavItemLink's prop type local --
-// avoids a second export nobody outside this file needs.
-type NavEntry = (typeof primaryEntries)[number];

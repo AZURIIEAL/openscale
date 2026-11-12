@@ -3,6 +3,7 @@ import type { SearchCategory } from './entities';
 export const MAX_RESULTS_PER_CATEGORY = 5;
 
 export const CATEGORY_LABEL: Record<SearchCategory, string> = {
+  project: 'Projects',
   screen: 'Screens',
   job: 'Jobs',
   table: 'Tables',

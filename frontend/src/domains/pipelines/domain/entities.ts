@@ -2,6 +2,7 @@ export type JobState = 'queued' | 'running' | 'succeeded' | 'partial' | 'failed'
 
 export interface JobRun {
   id: string;
+  projectId: string;
   jobType: string;
   params: Record<string, unknown>;
   state: JobState;
