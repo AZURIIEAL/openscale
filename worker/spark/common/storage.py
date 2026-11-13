@@ -3,9 +3,10 @@ MinIO (S3-compatible) connection config for the OpenScale data lake.
 
 Local dev only: points at the MinIO container defined in docker-compose.yml
 at the repo root (default creds, localhost-only, `docker compose up -d`).
-Reads MINIO_ENDPOINT from the environment so this same code works whether
-run on the host (localhost) or inside a container on the compose network
-(the "minio" service name) -- defaults to the host value unchanged.
+Reads MINIO_ENDPOINT, MINIO_ACCESS_KEY and MINIO_SECRET_KEY from the
+environment (the same names the Go control-plane's internal/config uses) so
+this code works on the host, inside compose, and against a lake that is not
+the bundled MinIO. The defaults are the compose stack's dev-only values.
 """
 
 import os
@@ -13,9 +14,9 @@ import os
 import fsspec
 
 MINIO_ENDPOINT = os.environ.get("MINIO_ENDPOINT", "http://localhost:9000")
-MINIO_ACCESS_KEY = "minioadmin"
-MINIO_SECRET_KEY = "minioadmin"
-LAKE_BUCKET = "openscale-lake"
+MINIO_ACCESS_KEY = os.environ.get("MINIO_ACCESS_KEY", "minioadmin")
+MINIO_SECRET_KEY = os.environ.get("MINIO_SECRET_KEY", "minioadmin")
+LAKE_BUCKET = os.environ.get("LAKE_BUCKET", "openscale-lake")
 
 STORAGE_OPTIONS = {
     "key": MINIO_ACCESS_KEY,

@@ -20,7 +20,7 @@ export async function apiPost<T>(path: string, body?: unknown): Promise<T> {
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });
   if (!res.ok) {
-    throw new Error(`POST ${path} failed: ${res.status} ${res.statusText}`);
+    throw new Error(`POST ${path} failed: ${res.status} ${await readErrorBody(res)}`);
   }
   return res.json() as Promise<T>;
 }
@@ -37,6 +37,18 @@ export async function apiPut<T>(path: string, body: unknown): Promise<T> {
   return res.json() as Promise<T>;
 }
 
+export async function apiPatch<T>(path: string, body: unknown): Promise<T> {
+  const res = await fetch(`${API_BASE_URL}${path}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    throw new Error(`PATCH ${path} failed: ${res.status} ${await readErrorBody(res)}`);
+  }
+  return res.json() as Promise<T>;
+}
+
 export async function apiDelete(path: string): Promise<void> {
   const res = await fetch(`${API_BASE_URL}${path}`, { method: 'DELETE' });
   if (!res.ok) {
@@ -47,4 +59,15 @@ export async function apiDelete(path: string): Promise<void> {
 /** Builds a ws://.../wss://... URL from the same base the HTTP helpers use. */
 export function wsUrl(path: string): string {
   return `${API_BASE_URL.replace(/^http/, 'ws')}${path}`;
+}
+
+/** The control-plane writes validation errors as a plain-text body (via
+ * http.Error), so surface that instead of a bare status text. */
+async function readErrorBody(res: Response): Promise<string> {
+  try {
+    const text = (await res.text()).trim();
+    return text || res.statusText;
+  } catch {
+    return res.statusText;
+  }
 }

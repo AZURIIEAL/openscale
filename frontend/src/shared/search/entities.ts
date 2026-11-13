@@ -1,4 +1,4 @@
-export type SearchCategory = 'screen' | 'job' | 'table' | 'run';
+export type SearchCategory = 'project' | 'screen' | 'job' | 'table' | 'run';
 
 /** One row in the search dropdown. `path`/`navState` are exactly what
  * react-router's navigate(path, {state: navState}) needs -- the receiving

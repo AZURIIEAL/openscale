@@ -71,7 +71,7 @@ func (h *Handler) HandleJobWS(w http.ResponseWriter, r *http.Request) {
 	if writeJSON(ctx, conn, run) != nil {
 		return
 	}
-	if isTerminal(run.Status) {
+	if jobs.IsTerminal(run.Status) {
 		_ = conn.Close(websocket.StatusNormalClosure, "terminal")
 		return
 	}
@@ -90,16 +90,12 @@ func (h *Handler) HandleJobWS(w http.ResponseWriter, r *http.Request) {
 			if writeJSON(ctx, conn, event) != nil {
 				return
 			}
-			if event.Type == "status" && isTerminal(jobs.Status(event.Status)) {
+			if event.Type == "status" && jobs.IsTerminal(jobs.Status(event.Status)) {
 				_ = conn.Close(websocket.StatusNormalClosure, "terminal")
 				return
 			}
 		}
 	}
-}
-
-func isTerminal(s jobs.Status) bool {
-	return s == jobs.StatusSucceeded || s == jobs.StatusPartial || s == jobs.StatusFailed
 }
 
 func writeJSON(ctx context.Context, conn *websocket.Conn, v any) error {

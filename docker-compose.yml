@@ -40,7 +40,10 @@ services:
       "
 
   kafka:
-    image: apache/kafka:latest
+    # Pinned so a rebuild months from now gets the same broker. MinIO,
+    # Grafana and the Jupyter base image still track `latest`; pin them
+    # too once you have checked which tags your registry mirrors carry.
+    image: apache/kafka:4.1.0
     container_name: openscale-kafka
     ports:
       - "29092:29092" # broker, reachable from the host at localhost:29092 -- see EXTERNAL listener below
@@ -103,7 +106,7 @@ services:
       - redis-data:/data
 
   prometheus:
-    image: prom/prometheus:latest
+    image: prom/prometheus:v3.5.0
     container_name: openscale-prometheus
     ports:
       - "9090:9090"
@@ -181,8 +184,9 @@ services:
     volumes:
       # Grants access to the host's Docker daemon so internal/docker can
       # inspect sibling containers (openscale-minio, openscale-kafka, ...)
-      # for /api/system-health. Read-only: this service only inspects,
-      # never starts/stops containers today.
+      # for /api/system-health, and start/stop/restart them for the
+      # Infrastructure screen and cancel-all. The :ro is on the socket file
+      # itself, not the API: anything reachable over the socket is allowed.
       - /var/run/docker.sock:/var/run/docker.sock:ro
     depends_on:
       postgres:
@@ -220,6 +224,8 @@ services:
       REDIS_ADDR: "redis:6379"
       POSTGRES_DSN: "postgresql://openscale:openscale@postgres:5432/openscale"
       MINIO_ENDPOINT: "http://minio:9000"
+      MINIO_ACCESS_KEY: minioadmin
+      MINIO_SECRET_KEY: minioadmin
       KAFKA_BROKER: "kafka:9092"
       # In local[*] mode there's no separate executor JVM -- this is the
       # *only* heap budget for the whole Spark job, driver + all parallel

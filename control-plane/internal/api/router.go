@@ -38,7 +38,7 @@ func NewRouter(
 	r.Use(middleware.Recoverer)
 	r.Use(cors.Handler(cors.Options{
 		AllowedOrigins:   []string{frontendOrigin},
-		AllowedMethods:   []string{http.MethodGet, http.MethodPost, http.MethodPut, http.MethodDelete},
+		AllowedMethods:   []string{http.MethodGet, http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete},
 		AllowedHeaders:   []string{"Content-Type"},
 		AllowCredentials: false,
 		MaxAge:           300,
@@ -53,6 +53,7 @@ func NewRouter(
 	healthHandler := NewHealthHandler(watcher)
 	actionHandler := NewContainerActionHandler(watcher)
 	statsHandler := NewStatsHandler(watcher)
+	projectsHandler := NewProjectsHandler(database)
 	jobsHandler := NewJobsHandler(database, redisClient, watcher)
 	dashboardsHandler := NewDashboardsHandler(database)
 	appearanceHandler := NewAppearanceHandler(database)
@@ -60,33 +61,48 @@ func NewRouter(
 	streamingHandler := NewStreamingHandler(streamingClient, streamHub, frontendOrigin)
 	lakeHandler := NewLakeHandler(lakeClient)
 	r.Route("/api", func(r chi.Router) {
+		// System-wide routes: the stack itself, not any one project.
 		r.Get("/system-health", healthHandler.ServeHTTP)
 		r.Post("/services/{id}/start", actionHandler.Start)
 		r.Post("/services/{id}/stop", actionHandler.Stop)
 		r.Post("/services/{id}/restart", actionHandler.Restart)
 		r.Get("/container-stats", statsHandler.ServeHTTP)
 
-		r.Post("/jobs/{type}/run", jobsHandler.Run)
-		r.Get("/jobs/runs", jobsHandler.ListRuns)
-		r.Delete("/jobs/runs", jobsHandler.ClearRuns)
-		r.Post("/jobs/cancel-all", jobsHandler.CancelAll)
-		r.Post("/jobs/{id}/control", jobsHandler.Control)
-
-		r.Get("/dashboards/overview", dashboardsHandler.Overview)
-		r.Get("/home/stats", dashboardsHandler.HomeStats)
-
 		r.Get("/appearance-settings", appearanceHandler.Get)
 		r.Put("/appearance-settings", appearanceHandler.Update)
 
+		// Not yet project-scoped: the SQL editor reads Postgres as a whole,
+		// the lake browser lists fixed prefixes and streaming tails one
+		// topic. They move under /projects when datasets exist (Phase 2-3).
 		r.Post("/query", queryHandler.Run)
 		r.Get("/query/catalog", queryHandler.Catalog)
-
 		r.Get("/streaming/topics", streamingHandler.Topics)
 		r.Get("/streaming/ws", streamingHandler.WS)
-
 		r.Get("/catalog/lake", lakeHandler.List)
 
+		// Run ids are globally unique, so the live-log socket stays unscoped.
 		r.Get("/ws/jobs/{id}", wsHandler.HandleJobWS)
+
+		r.Get("/projects", projectsHandler.List)
+		r.Post("/projects", projectsHandler.Create)
+		r.Route("/projects/{projectId}", func(r chi.Router) {
+			// Resolves {projectId} (id or slug) once, 404s unknown ones, and
+			// puts the project in the request context for every route below.
+			r.Use(projectsHandler.Middleware)
+
+			r.Get("/", projectsHandler.Get)
+			r.Patch("/", projectsHandler.Update)
+			r.Delete("/", projectsHandler.Archive)
+
+			r.Post("/jobs/{type}/run", jobsHandler.Run)
+			r.Get("/jobs/runs", jobsHandler.ListRuns)
+			r.Delete("/jobs/runs", jobsHandler.ClearRuns)
+			r.Post("/jobs/cancel-all", jobsHandler.CancelAll)
+			r.Post("/jobs/{id}/control", jobsHandler.Control)
+
+			r.Get("/dashboards/overview", dashboardsHandler.Overview)
+			r.Get("/home/stats", dashboardsHandler.HomeStats)
+		})
 	})
 
 	return r

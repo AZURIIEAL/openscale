@@ -27,6 +27,7 @@ npm run dev        # http://localhost:5173
 | `npm run build` | Type-check (`tsc -b`) + production build to `dist/` |
 | `npm run preview` | Serve the production build locally |
 | `npm run lint` | oxlint |
+| `npm test` | vitest, over the pure `domain/rules.ts` and `shared/project/rules.ts` modules |
 
 ### Environment
 
@@ -54,6 +55,7 @@ src/
     api/          httpClient: the fetch wrapper all HTTP gateways build on
     design-system/  Panel, Well, Led, Toggle, RunButton, StatCard, gauges, icons, tokens.css, fonts
     layout/       AppShell, Sidebar, TopBar, SearchBar (⌘K), navigation.ts (nav entries + paths)
+    project/      Projects: current-project hook, switcher, new-project screen, /p/:slug layout, route/API path rules
     search/       Global search: entities, ranking rules, hook
     types/        Shared status types
   assets/fonts/   Self-hosted Plus Jakarta Sans + JetBrains Mono (variable)
@@ -106,7 +108,23 @@ view. It doesn't copy that code.
 2. Add the entry (path, label, icon, subtitle) to
    [`src/shared/layout/navigation.ts`](src/shared/layout/navigation.ts),
    which is the source of truth for path strings.
-3. Add the matching route in [`src/app/router.tsx`](src/app/router.tsx).
+3. Add the matching route in [`src/app/router.tsx`](src/app/router.tsx) --
+   under `/p/:projectSlug` for a project screen, top-level for a system one.
+
+## Projects
+
+Every project screen lives under `/p/{slug}/...`; `/` redirects to the
+last-used project (persisted in localStorage) or to `/projects/new`.
+`useCurrentProject()` (`src/shared/project/`) reads the slug from the route;
+project-scoped gateways take it as their first argument and TanStack Query
+keys carry it second (`['pipelines', slug, 'runs', page]`), so switching
+projects never shows another project's cached data. The control-plane
+accepts the slug wherever its routes say `{projectId}`.
+
+Pipelines, Dashboards and Streaming are still hardcoded to the taxi
+pipeline, so `RequireFeature` gates them to the project flagged
+`legacy_taxi` (the `nyc-taxi` sample) until Phase 4 of the implementation
+plan makes them per-project rows.
 4. If it needs data, add the endpoint to the control-plane first, then an
    `http*Gateway` that calls it through `shared/api/httpClient`.
 

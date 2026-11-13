@@ -30,10 +30,11 @@ export const mockStreamingGateway: StreamingGateway = {
     };
   },
 
-  async startReplay(params) {
+  async startReplay(_projectSlug, params) {
     const now = new Date().toISOString();
     return {
       id: 'mock-replay-run',
+      projectId: 'mock',
       jobType: 'replay',
       params: { ...params },
       state: 'succeeded',

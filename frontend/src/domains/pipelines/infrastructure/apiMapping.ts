@@ -6,6 +6,7 @@ import type { JobRun, JobState } from '../domain/entities';
  * so the API's exact shape doesn't leak past infrastructure/. */
 export interface ApiJobRun {
   id: string;
+  projectId: string;
   jobType: string;
   params: Record<string, unknown>;
   status: JobState;
@@ -20,6 +21,7 @@ export interface ApiJobRun {
 export function mapApiJobRun(api: ApiJobRun): JobRun {
   return {
     id: api.id,
+    projectId: api.projectId,
     jobType: api.jobType,
     params: api.params,
     state: api.status,

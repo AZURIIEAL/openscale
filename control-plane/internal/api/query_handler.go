@@ -4,10 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
-	"strings"
 	"time"
 
 	"github.com/AZURIIEAL/openscale/control-plane/internal/db"
+	"github.com/AZURIIEAL/openscale/control-plane/internal/sqlcheck"
 )
 
 // QueryHandler serves the SQL Editor's ad-hoc, read-only queries against
@@ -56,7 +56,7 @@ func (h *QueryHandler) Run(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 
-	if reason, ok := validateReadOnlySQL(req.SQL); !ok {
+	if reason, ok := sqlcheck.ValidateReadOnly(req.SQL); !ok {
 		_ = json.NewEncoder(w).Encode(queryResponse{Error: reason})
 		return
 	}
@@ -97,70 +97,4 @@ func (h *QueryHandler) Catalog(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(catalog)
-}
-
-// validateReadOnlySQL is the fail-fast half of the safety design -- a
-// quick, cheap rejection of anything obviously not a read, before the
-// query ever reaches Postgres. It is NOT the real enforcement: the
-// read-only transaction in RunReadOnlyQuery is what actually stops a
-// write that slips past this check (e.g. a SELECT that hides a
-// side-effecting function call). Returns a user-facing rejection reason
-// and false when the SQL is rejected.
-func validateReadOnlySQL(sql string) (string, bool) {
-	if strings.TrimSpace(sql) == "" {
-		return "SQL query cannot be empty.", false
-	}
-
-	body := trimLeadingSQLNoise(sql)
-	lower := strings.ToLower(body)
-	if !strings.HasPrefix(lower, "select") && !strings.HasPrefix(lower, "with") {
-		return "Only SELECT queries are allowed.", false
-	}
-
-	if len(nonEmptyStatements(sql)) > 1 {
-		return "Only a single SQL statement is allowed.", false
-	}
-
-	return "", true
-}
-
-// trimLeadingSQLNoise strips leading whitespace and comments (-- line,
-// /* block */) so the SELECT/WITH prefix check isn't fooled by a query
-// that merely starts with a comment.
-func trimLeadingSQLNoise(sql string) string {
-	s := sql
-	for {
-		next := strings.TrimLeft(s, " \t\r\n")
-		switch {
-		case strings.HasPrefix(next, "--"):
-			if idx := strings.IndexByte(next, '\n'); idx >= 0 {
-				next = next[idx+1:]
-			} else {
-				next = ""
-			}
-		case strings.HasPrefix(next, "/*"):
-			if idx := strings.Index(next, "*/"); idx >= 0 {
-				next = next[idx+2:]
-			} else {
-				next = ""
-			}
-		}
-		if next == s {
-			return next
-		}
-		s = next
-	}
-}
-
-// nonEmptyStatements splits sql on ';' and returns the segments that
-// aren't pure whitespace, tolerating one optional trailing ';'.
-func nonEmptyStatements(sql string) []string {
-	parts := strings.Split(sql, ";")
-	statements := make([]string, 0, len(parts))
-	for _, p := range parts {
-		if strings.TrimSpace(p) != "" {
-			statements = append(statements, p)
-		}
-	}
-	return statements
 }

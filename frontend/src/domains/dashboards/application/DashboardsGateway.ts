@@ -5,5 +5,5 @@ import type { DashboardsOverview } from '../domain/entities';
  * covering every chart tile. infrastructure/ provides the http implementation.
  */
 export interface DashboardsGateway {
-  fetchOverview(): Promise<DashboardsOverview>;
+  fetchOverview(projectSlug: string): Promise<DashboardsOverview>;
 }

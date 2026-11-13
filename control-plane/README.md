@@ -46,6 +46,8 @@ internal/
   metrics/           The only Prometheus client user: /metrics, HTTP middleware, job-run collector
   redis/             The only go-redis user: job request stream, live event pub/sub, control hashes
   streaming/         The only kafka-go user: topic listing, trip consumer, windowed aggregates, WS hub
+  projects/          Project domain: type, slug rules, create/update validation (pure, tested)
+  sqlcheck/          Single-SELECT check for the SQL editor (pure, tested)
   ws/                WebSocket hub relaying job events to /api/ws/jobs/{id} subscribers
 ```
 
@@ -65,29 +67,37 @@ Every route is registered in
 | GET | `/api/system-health` | Status of the nine watched containers |
 | POST | `/api/services/{id}/start` · `/stop` · `/restart` | Container control (IDs: `minio`, `kafka`, `postgres`, `redis`, `prometheus`, `grafana`, `worker`, `jupyter`, `mlflow`) |
 | GET | `/api/container-stats` | Per-container CPU/memory plus host totals |
-| POST | `/api/jobs/{type}/run` | Queue a job. Body = JSON params. Returns the run (`202`) |
-| GET | `/api/jobs/runs?limit=&offset=` | Page of runs, newest first, plus `hasMore` |
-| DELETE | `/api/jobs/runs` | Delete finished runs (queued/running are kept) |
-| POST | `/api/jobs/cancel-all` | Cancel queued and running runs; restarts the worker if one was running |
-| POST | `/api/jobs/{id}/control` | Live control for a running replay: `{"action": "pause" \| "resume" \| "cancel" \| "setSpeed", "speedMultiplier": 1\|2\|3\|5\|10}` |
-| GET | `/api/ws/jobs/{id}` | WebSocket: live `status`/`log` events for one run |
-| GET | `/api/dashboards/overview` | All Dashboards-screen chart data |
-| GET | `/api/home/stats` | Home stat cards |
-| POST | `/api/query` | Run a read-only `SELECT`/`WITH` (read-only transaction, row-capped) |
+| GET / POST | `/api/projects` | List projects · create one (`{"name", "slug"?, "description"?}`, slug derived from the name when omitted) |
+| GET / PATCH / DELETE | `/api/projects/{p}` | One project · rename/describe/`aiSettings` · archive (runs are kept). `{p}` is the id **or the slug** everywhere below |
+| POST | `/api/projects/{p}/jobs/{type}/run` | Queue a job. Body = JSON params. Returns the run (`202`) |
+| GET | `/api/projects/{p}/jobs/runs?limit=&offset=` | Page of the project's runs, newest first, plus `hasMore` |
+| DELETE | `/api/projects/{p}/jobs/runs` | Delete the project's finished runs (queued/running are kept) |
+| POST | `/api/projects/{p}/jobs/cancel-all` | Cancel the project's queued and running runs; restarts the worker only if one of *this* project's runs was running |
+| POST | `/api/projects/{p}/jobs/{id}/control` | Live control for a running replay: `{"action": "pause" \| "resume" \| "cancel" \| "setSpeed", "speedMultiplier": 1\|2\|3\|5\|10}` |
+| GET | `/api/ws/jobs/{id}` | WebSocket: live `status`/`log` events for one run (run ids are global, so this stays unscoped) |
+| GET | `/api/projects/{p}/dashboards/overview` | All Dashboards-screen chart data |
+| GET | `/api/projects/{p}/home/stats` | Home stat cards |
+| POST | `/api/query` | Run a read-only `SELECT`/`WITH` (read-only transaction, row-capped). Not yet project-scoped |
 | GET | `/api/query/catalog` | Queryable schemas, tables and columns |
 | GET | `/api/catalog/lake` | MinIO lake contents by layer |
 | GET | `/api/streaming/topics` | Kafka topics |
 | GET | `/api/streaming/ws` | WebSocket: live trips and windowed aggregates |
 | GET / PUT | `/api/appearance-settings` | Persisted theme and UI settings |
 
-Job types for `/api/jobs/{type}/run` come from `jobs.Catalog`
+Every route under `/api/projects/{p}` goes through
+`ProjectsHandler.Middleware` (`internal/api/projects_handler.go`), which
+resolves the id or slug once, answers `404` for an unknown project, and puts
+it in the request context -- the one place project scoping is enforced.
+
+Job types for `/api/projects/{p}/jobs/{type}/run` come from `jobs.Catalog`
 ([`internal/jobs/jobs.go`](internal/jobs/jobs.go)): `ingest`
 (`{"start":"2024-07","end":"2024-12"}`), `silver`, `gold`, `features`,
 `train`, `replay` (`{"limit":500,"messagesPerSecond":10}`), `reset`.
 
 ```bash
-curl -X POST localhost:8080/api/jobs/ingest/run -d '{"start":"2024-07","end":"2024-07"}'
-curl 'localhost:8080/api/jobs/runs?limit=5'
+curl localhost:8080/api/projects
+curl -X POST localhost:8080/api/projects/nyc-taxi/jobs/ingest/run -d '{"start":"2024-07","end":"2024-07"}'
+curl 'localhost:8080/api/projects/nyc-taxi/jobs/runs?limit=5'
 ```
 
 ## Job lifecycle
@@ -158,3 +168,15 @@ to stop one mid-run.
 in filename order on the next startup. `db/queries/*.sql` + `sqlc.yaml`
 describe the queries in sqlc format, but `internal/db` is currently
 hand-written against pgx (see the note at the top of `internal/db/db.go`).
+
+## Tests
+
+```bash
+go test ./...
+```
+
+The dependency-free packages (`internal/health`, `internal/jobs`,
+`internal/projects`, `internal/sqlcheck`) carry table-driven unit tests and
+run in CI on every push (`.github/workflows/ci.yml`). Handlers and `internal/db`
+are exercised against the running stack; a Postgres-backed test harness is
+on the list for Phase 2 of the implementation plan.

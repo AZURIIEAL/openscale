@@ -9,6 +9,8 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
+
+	"github.com/AZURIIEAL/openscale/control-plane/internal/jobs"
 )
 
 // The gold_* tables are written directly by the worker (see
@@ -164,11 +166,12 @@ type TrainMetricPoint struct {
 
 // ListTrainMetrics returns every succeeded train run's logged mae/rmse/r2,
 // chronological, for the "model quality over retrains" chart.
-func (d *DB) ListTrainMetrics(ctx context.Context) ([]TrainMetricPoint, error) {
+func (d *DB) ListTrainMetrics(ctx context.Context, projectID string) ([]TrainMetricPoint, error) {
 	rows, err := d.pool.Query(ctx,
 		`SELECT finished_at, metrics FROM control_plane.job_runs
-		 WHERE job_type = 'train' AND status = 'succeeded' AND metrics IS NOT NULL
+		 WHERE project_id = $1::uuid AND job_type = 'train' AND status = 'succeeded' AND metrics IS NOT NULL
 		 ORDER BY finished_at`,
+		projectID,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("db: list train metrics: %w", err)
@@ -205,11 +208,12 @@ type JobTypeHealth struct {
 
 // ETLHealthSummary rolls job_runs up by job_type: terminal-status counts
 // plus average wall-clock duration, for the pipeline-health tile.
-func (d *DB) ETLHealthSummary(ctx context.Context) ([]JobTypeHealth, error) {
+func (d *DB) ETLHealthSummary(ctx context.Context, projectID string) ([]JobTypeHealth, error) {
 	counts, err := d.pool.Query(ctx,
 		`SELECT job_type, status, COUNT(*) FROM control_plane.job_runs
-		 WHERE status IN ('succeeded', 'partial', 'failed')
+		 WHERE project_id = $1::uuid AND status IN ('succeeded', 'partial', 'failed')
 		 GROUP BY job_type, status`,
+		projectID,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("db: etl health counts: %w", err)
@@ -244,8 +248,9 @@ func (d *DB) ETLHealthSummary(ctx context.Context) ([]JobTypeHealth, error) {
 	durations, err := d.pool.Query(ctx,
 		`SELECT job_type, AVG(EXTRACT(EPOCH FROM (finished_at - started_at)))
 		 FROM control_plane.job_runs
-		 WHERE status IN ('succeeded', 'partial', 'failed') AND started_at IS NOT NULL AND finished_at IS NOT NULL
+		 WHERE project_id = $1::uuid AND status IN ('succeeded', 'partial', 'failed') AND started_at IS NOT NULL AND finished_at IS NOT NULL
 		 GROUP BY job_type`,
+		projectID,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("db: etl health durations: %w", err)
@@ -276,12 +281,13 @@ func (d *DB) ETLHealthSummary(ctx context.Context) ([]JobTypeHealth, error) {
 // LatestSilverRowsProcessed returns the most recent succeeded silver run's
 // row count -- the current size of the Silver dataset, not a cumulative
 // sum across historical reruns.
-func (d *DB) LatestSilverRowsProcessed(ctx context.Context) (*int64, error) {
+func (d *DB) LatestSilverRowsProcessed(ctx context.Context, projectID string) (*int64, error) {
 	var rowsProcessed *int64
 	err := d.pool.QueryRow(ctx,
 		`SELECT rows_processed FROM control_plane.job_runs
-		 WHERE job_type = 'silver' AND status = 'succeeded' AND rows_processed IS NOT NULL
+		 WHERE project_id = $1::uuid AND job_type = 'silver' AND status = 'succeeded' AND rows_processed IS NOT NULL
 		 ORDER BY finished_at DESC LIMIT 1`,
+		projectID,
 	).Scan(&rowsProcessed)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -293,12 +299,13 @@ func (d *DB) LatestSilverRowsProcessed(ctx context.Context) (*int64, error) {
 }
 
 // LatestFareModelMae returns the most recent succeeded train run's MAE.
-func (d *DB) LatestFareModelMae(ctx context.Context) (*float64, error) {
+func (d *DB) LatestFareModelMae(ctx context.Context, projectID string) (*float64, error) {
 	var raw []byte
 	err := d.pool.QueryRow(ctx,
 		`SELECT metrics FROM control_plane.job_runs
-		 WHERE job_type = 'train' AND status = 'succeeded' AND metrics IS NOT NULL
+		 WHERE project_id = $1::uuid AND job_type = 'train' AND status = 'succeeded' AND metrics IS NOT NULL
 		 ORDER BY finished_at DESC LIMIT 1`,
+		projectID,
 	).Scan(&raw)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -318,9 +325,11 @@ func (d *DB) LatestFareModelMae(ctx context.Context) (*float64, error) {
 // IngestedMonthsCount counts distinct "YYYY-MM" months covered by every
 // succeeded/partial ingest run's params range -- no separate manifest
 // table needed, job_runs.params already has everything.
-func (d *DB) IngestedMonthsCount(ctx context.Context) (int, error) {
+func (d *DB) IngestedMonthsCount(ctx context.Context, projectID string) (int, error) {
 	rows, err := d.pool.Query(ctx,
-		`SELECT params FROM control_plane.job_runs WHERE job_type = 'ingest' AND status IN ('succeeded', 'partial')`,
+		`SELECT params FROM control_plane.job_runs
+		 WHERE project_id = $1::uuid AND job_type = 'ingest' AND status IN ('succeeded', 'partial')`,
+		projectID,
 	)
 	if err != nil {
 		return 0, fmt.Errorf("db: ingested months: %w", err)
@@ -340,7 +349,7 @@ func (d *DB) IngestedMonthsCount(ctx context.Context) (int, error) {
 		if err := json.Unmarshal(raw, &params); err != nil {
 			continue // malformed/legacy params -- skip rather than fail the whole count
 		}
-		for _, m := range expandMonthRange(params.Start, params.End) {
+		for _, m := range jobs.ExpandMonthRange(params.Start, params.End) {
 			months[m] = struct{}{}
 		}
 	}
@@ -348,17 +357,4 @@ func (d *DB) IngestedMonthsCount(ctx context.Context) (int, error) {
 		return 0, err
 	}
 	return len(months), nil
-}
-
-func expandMonthRange(start, end string) []string {
-	startT, errStart := time.Parse("2006-01", start)
-	endT, errEnd := time.Parse("2006-01", end)
-	if errStart != nil || errEnd != nil || endT.Before(startT) {
-		return nil
-	}
-	var months []string
-	for t := startT; !t.After(endT); t = t.AddDate(0, 1, 0) {
-		months = append(months, t.Format("2006-01"))
-	}
-	return months
 }
