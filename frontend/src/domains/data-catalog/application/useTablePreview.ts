@@ -1,5 +1,6 @@
 import { useMutation } from '@tanstack/react-query';
 import { httpQueryGateway } from '@/domains/sql-editor/infrastructure/httpQueryGateway';
+import { useQueryTarget } from '@/domains/sql-editor/application/useQueryTarget';
 import { isQueryError } from '@/domains/sql-editor/domain/rules';
 import type { QueryResult } from '@/domains/sql-editor/domain/entities';
 import { quotedTableRef } from '../domain/rules';
@@ -25,12 +26,13 @@ const gateway = httpQueryGateway;
  * mutation, not a query -- this must run only when a user explicitly
  * expands a table, never eagerly for every table on page load. */
 export function useTablePreview() {
+  const target = useQueryTarget();
   return useMutation({
     mutationFn: async ({ schema, table }: { schema: string; table: string }): Promise<TablePreviewResult> => {
       const ref = quotedTableRef(schema, table);
       const [countResult, sampleResult] = await Promise.all([
-        gateway.runQuery(`SELECT COUNT(*) FROM ${ref}`),
-        gateway.runQuery(`SELECT * FROM ${ref} LIMIT 20`),
+        gateway.runQuery(target, `SELECT COUNT(*) FROM ${ref}`),
+        gateway.runQuery(target, `SELECT * FROM ${ref} LIMIT 20`),
       ]);
 
       return {

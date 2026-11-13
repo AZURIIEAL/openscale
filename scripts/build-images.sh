@@ -14,16 +14,23 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
+# worker and query-engine build from the repo root (-f <Dockerfile>) so the
+# shared libs/openscale package is inside their build context.
 declare -A CONTEXT=(
   [control-plane]=./control-plane
   [frontend]=./frontend
-  [worker]=./worker
+  [worker]=.
+  [query-engine]=.
   [jupyter]=./jupyter
+)
+declare -A DOCKERFILE=(
+  [worker]=worker/Dockerfile
+  [query-engine]=query-engine/Dockerfile
 )
 
 services=("$@")
 if [ ${#services[@]} -eq 0 ]; then
-  services=(control-plane frontend worker jupyter)
+  services=(control-plane frontend worker query-engine jupyter)
 fi
 
 for svc in "${services[@]}"; do
@@ -33,8 +40,9 @@ for svc in "${services[@]}"; do
     echo "unknown service: $svc (expected: ${!CONTEXT[*]} mlflow)" >&2
     exit 1
   fi
-  echo "==> building openscale-$svc from $ctx"
-  docker build --network host -t "openscale-$svc" "$ctx"
+  df=${DOCKERFILE[$svc]:-}
+  echo "==> building openscale-$svc from $ctx${df:+ ($df)}"
+  docker build --network host -t "openscale-$svc" ${df:+-f "$df"} "$ctx"
   # mlflow runs the worker image with a different entrypoint.
   if [ "$svc" = worker ]; then
     docker tag openscale-worker openscale-mlflow

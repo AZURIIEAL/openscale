@@ -10,7 +10,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends openjdk-21-jre-
     && rm -rf /var/lib/apt/lists/*
 ENV JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64
 ENV PATH="${JAVA_HOME}/bin:${PATH}"
-COPY requirements.txt .
+# Build context is the repo root (see docker-compose.yml) so the shared
+# libs/openscale package can be installed alongside the worker.
+COPY worker/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
-COPY . .
+COPY libs/openscale /app/libs/openscale
+RUN pip install --no-cache-dir /app/libs/openscale
+COPY worker/ .
 ENTRYPOINT ["python", "main.py"]

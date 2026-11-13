@@ -95,6 +95,10 @@ var Catalog = []Definition{
 	// Pipelines screen's dedicated "Clear Data" control. It's listed here so
 	// IsKnownJobType/Run accept it like any other job type.
 	{Type: "reset", Label: "Clear Data", Description: "Wipe Bronze/Silver/Gold objects in MinIO and Gold/feature tables in Postgres"},
+	// Dataset jobs are queued by the datasets API, not from the run form;
+	// they are in the catalog so IsKnownJobType and the run list know them.
+	{Type: "dataset_fetch", Label: "Fetch dataset", Description: "Download a dataset's source URL into its raw/ folder, then ingest it"},
+	{Type: "dataset_ingest", Label: "Ingest dataset", Description: "Convert a dataset's raw files to Parquet, infer its schema and profile its columns"},
 }
 
 // IsKnownJobType reports whether type is triggerable -- checked before

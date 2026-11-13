@@ -1,14 +1,17 @@
-// Package lake wraps the MinIO (S3-compatible) client for read-only access
-// to the openscale-lake bucket -- mirrors the isolation convention already
-// used for internal/redis, internal/docker, and internal/streaming: one
-// package per external system, nothing outside this package talks to the
-// underlying SDK (minio-go) directly.
+// Package lake wraps the MinIO (S3-compatible) client for the
+// openscale-lake bucket -- mirrors the isolation convention already used
+// for internal/redis, internal/docker, and internal/streaming: one package
+// per external system, nothing outside this package talks to the
+// underlying SDK (minio-go) directly. Reads list objects; the only writes
+// are the dataset raw-file upload (PutObject) and dataset removal
+// (DeletePrefix) -- the worker writes everything else.
 package lake
 
 import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"strings"
 	"time"
 
@@ -16,14 +19,15 @@ import (
 	"github.com/minio/minio-go/v7/pkg/credentials"
 )
 
-// bucket is the lake's single bucket name -- matches LAKE_BUCKET in
-// worker/spark/common/storage.py. Not configurable anywhere else in this
-// repo either, so it's hardcoded here too rather than threaded through
-// config for no real benefit.
-const bucket = "openscale-lake"
+// Bucket is the lake's single bucket name -- matches LAKE_BUCKET in
+// worker/spark/common/storage.py and libs/openscale. Exported so the
+// query engine's dataset paths (s3://{Bucket}/...) can be built from it.
+const Bucket = "openscale-lake"
 
-// Client is a thin, read-only wrapper around minio-go's client, scoped to
-// the openscale-lake bucket.
+const bucket = Bucket
+
+// Client is a thin wrapper around minio-go's client, scoped to the
+// openscale-lake bucket.
 type Client struct {
 	mc *minio.Client
 }
@@ -108,4 +112,39 @@ func isNotFound(err error) bool {
 		return errResp.Code == "NoSuchBucket" || errResp.Code == "NoSuchKey"
 	}
 	return false
+}
+
+// uploadPartSize bounds memory per in-flight upload. minio-go buffers one
+// part at a time for a reader of unknown length, and its default part size
+// for that case is large (hundreds of MB, sized for the 5 TB object cap);
+// 16 MiB keeps a 200 MB upload well under the file's own size in RAM.
+const uploadPartSize = 16 * 1024 * 1024
+
+// PutObject streams body to key without buffering the whole object. size
+// may be -1 when unknown (a multipart upload part), in which case minio-go
+// uses a multipart upload with uploadPartSize parts.
+func (c *Client) PutObject(ctx context.Context, key string, body io.Reader, size int64, contentType string) (int64, error) {
+	info, err := c.mc.PutObject(ctx, bucket, key, body, size, minio.PutObjectOptions{
+		ContentType: contentType,
+		PartSize:    uploadPartSize,
+	})
+	if err != nil {
+		return 0, fmt.Errorf("lake: put %q: %w", key, err)
+	}
+	return info.Size, nil
+}
+
+// DeletePrefix removes every object under prefix. A prefix with nothing
+// under it is not an error.
+func (c *Client) DeletePrefix(ctx context.Context, prefix string) error {
+	if !strings.HasSuffix(prefix, "/") {
+		return fmt.Errorf("lake: refusing to delete non-directory prefix %q", prefix)
+	}
+	objectCh := c.mc.ListObjects(ctx, bucket, minio.ListObjectsOptions{Prefix: prefix, Recursive: true})
+	for result := range c.mc.RemoveObjects(ctx, bucket, objectCh, minio.RemoveObjectsOptions{}) {
+		if result.Err != nil && !isNotFound(result.Err) {
+			return fmt.Errorf("lake: delete %q: %w", result.ObjectName, result.Err)
+		}
+	}
+	return nil
 }

@@ -44,13 +44,13 @@ const MOCK_RESULT: QueryResult = {
 };
 
 export const mockQueryGateway: QueryGateway = {
-  async runQuery(sql) {
+  async runQuery(_target, sql) {
     if (!/^\s*(--.*\n|\s)*(select|with)\b/i.test(sql)) {
       return { error: 'Only SELECT queries are allowed.' } satisfies QueryError;
     }
     return MOCK_RESULT;
   },
-  async fetchCatalog() {
+  async fetchCatalog(_target) {
     return MOCK_CATALOG;
   },
 };

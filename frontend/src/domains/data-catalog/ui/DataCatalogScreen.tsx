@@ -1,24 +1,32 @@
+import { FEATURE_LEGACY_TAXI } from '@/shared/project/entities';
+import { hasFeature } from '@/shared/project/rules';
+import { useCurrentProject } from '@/shared/project/useCurrentProject';
+import { DatasetsPanel } from '@/domains/datasets/ui/DatasetsPanel';
 import { PostgresTablesPanel } from './PostgresTablesPanel';
 import { LakeBrowserPanel } from './LakeBrowserPanel';
 import { PipelineLineage } from './PipelineLineage';
 
 /**
- * Real Data Catalog, covering both places this app's data actually lives:
- * Postgres (Gold aggregates, the feature table, job history -- reusing the
- * SQL Editor's existing schema catalog and query-running mechanism) and the
- * MinIO lake (raw Bronze/Silver/Gold Parquet -- a new, real object listing
- * off the control-plane's new /api/catalog/lake). PipelineLineage is a
- * static, honest flow diagram of the five real pipeline stages, not a
- * computed/discovered graph -- see its own doc comment.
+ * Data Catalog. For every project: its datasets (upload, fetch, schema,
+ * preview, profile). The taxi sample project additionally keeps its
+ * original panels -- the Postgres Gold tables, the fixed Bronze/Silver/Gold
+ * lake prefixes and the static five-stage lineage -- until those stages
+ * become ordinary datasets and pipeline rows (Phase 4 of the plan).
  */
 export function DataCatalogScreen() {
+  const { project } = useCurrentProject();
+  const legacy = hasFeature(project, FEATURE_LEGACY_TAXI);
+
   return (
     <div className="flex flex-col gap-5">
-      <PipelineLineage />
-      <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
-        <PostgresTablesPanel />
-        <LakeBrowserPanel />
-      </div>
+      {legacy && <PipelineLineage />}
+      <DatasetsPanel />
+      {legacy && (
+        <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
+          <PostgresTablesPanel />
+          <LakeBrowserPanel />
+        </div>
+      )}
     </div>
   );
 }

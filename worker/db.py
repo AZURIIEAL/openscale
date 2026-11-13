@@ -61,3 +61,33 @@ def mark_terminal(
                 job_id,
             ),
         )
+
+
+# --- datasets (control_plane.datasets) ---
+
+
+def mark_dataset_ready(conn, dataset_id: str, columns: list, row_count: int, size_bytes: int, profile: dict) -> None:
+    with conn, conn.cursor() as cur:
+        cur.execute(
+            """
+            UPDATE control_plane.datasets
+            SET status = 'ready', error = NULL, columns = %s, row_count = %s, size_bytes = %s,
+                profile = %s, updated_at = now()
+            WHERE id = %s
+            """,
+            (
+                psycopg2.extras.Json(columns),
+                row_count,
+                size_bytes,
+                psycopg2.extras.Json(profile),
+                dataset_id,
+            ),
+        )
+
+
+def mark_dataset_failed(conn, dataset_id: str, error: str) -> None:
+    with conn, conn.cursor() as cur:
+        cur.execute(
+            "UPDATE control_plane.datasets SET status = 'failed', error = %s, updated_at = now() WHERE id = %s",
+            (error[:2000], dataset_id),
+        )

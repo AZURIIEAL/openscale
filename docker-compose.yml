@@ -216,9 +216,31 @@ services:
       - control-plane
     restart: unless-stopped
 
+  query-engine:
+    # DuckDB over the lake for the SQL editor, previews and profiles. No
+    # host port: only the control-plane calls it. It runs untrusted SQL,
+    # so it gets a memory cap and reaches nothing but MinIO.
+    build:
+      context: .
+      dockerfile: query-engine/Dockerfile
+    container_name: openscale-query-engine
+    environment:
+      MINIO_ENDPOINT: "http://minio:9000"
+      MINIO_ACCESS_KEY: minioadmin
+      MINIO_SECRET_KEY: minioadmin
+      DUCKDB_MEMORY_LIMIT: "1GB"
+      DUCKDB_THREADS: "2"
+      QUERY_TIMEOUT_SECONDS: "60"
+    mem_limit: 1536m
+    depends_on:
+      - minio
+    restart: unless-stopped
+
   worker:
     build:
-      context: ./worker
+      # Repo root so libs/openscale (shared with query-engine) is in reach.
+      context: .
+      dockerfile: worker/Dockerfile
     container_name: openscale-worker
     environment:
       REDIS_ADDR: "redis:6379"
@@ -281,7 +303,8 @@ services:
     # the exact same tracking store the worker's train job already writes
     # to, so nothing needs migrating.
     build:
-      context: ./worker
+      context: .
+      dockerfile: worker/Dockerfile
     container_name: openscale-mlflow
     entrypoint: ["mlflow"]
     command:

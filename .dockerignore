@@ -1,0 +1,19 @@
+# Root build context is used by worker/ and query-engine/ (they share
+# libs/openscale). Keep everything else out of the context they receive.
+.git
+.github
+control-plane
+frontend
+jupyter
+etl-exposure
+ideas
+notebooks
+samples
+worker/data
+worker/docs/quality-reports
+worker/ml/mlflow
+worker/.ivy2
+**/__pycache__
+**/*.py[cod]
+**/.pytest_cache
+**/node_modules

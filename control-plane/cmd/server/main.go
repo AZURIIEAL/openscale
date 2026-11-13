@@ -20,6 +20,7 @@ import (
 	"github.com/AZURIIEAL/openscale/control-plane/internal/docker"
 	"github.com/AZURIIEAL/openscale/control-plane/internal/lake"
 	"github.com/AZURIIEAL/openscale/control-plane/internal/metrics"
+	"github.com/AZURIIEAL/openscale/control-plane/internal/queryengine"
 	"github.com/AZURIIEAL/openscale/control-plane/internal/redis"
 	"github.com/AZURIIEAL/openscale/control-plane/internal/streaming"
 	"github.com/AZURIIEAL/openscale/control-plane/internal/ws"
@@ -78,7 +79,9 @@ func main() {
 
 	m := metrics.New(database)
 
-	router := api.NewRouter(watcher, database, redisClient, wsHandler, streamingClient, streamHub, lakeClient, m, cfg.FrontendOrigin)
+	engine := queryengine.NewClient(cfg.QueryEngineURL)
+
+	router := api.NewRouter(watcher, database, redisClient, wsHandler, streamingClient, streamHub, lakeClient, engine, m, cfg.FrontendOrigin, cfg.MaxUploadBytes)
 
 	srv := &http.Server{
 		Addr:              ":" + cfg.Port,

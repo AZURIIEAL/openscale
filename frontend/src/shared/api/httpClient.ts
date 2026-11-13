@@ -3,7 +3,7 @@
  * control-plane base URL and JSON error handling so individual gateways
  * (HttpSystemHealthGateway, and future ones) stay one-liners.
  */
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8080';
+export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8080';
 
 export async function apiGet<T>(path: string): Promise<T> {
   const res = await fetch(`${API_BASE_URL}${path}`);

@@ -44,6 +44,15 @@ type Config struct {
 	MinioEndpoint  string `env:"MINIO_ENDPOINT" envDefault:"http://localhost:9000"`
 	MinioAccessKey string `env:"MINIO_ACCESS_KEY" envDefault:"minioadmin"`
 	MinioSecretKey string `env:"MINIO_SECRET_KEY" envDefault:"minioadmin"`
+
+	// QueryEngineURL is the DuckDB query service (query-engine/). It has no
+	// host port in compose; the host-dev default is the port uvicorn uses
+	// when run directly.
+	QueryEngineURL string `env:"QUERY_ENGINE_URL" envDefault:"http://localhost:8090"`
+
+	// MaxUploadBytes caps one dataset file upload. Uploads stream straight
+	// to MinIO, so this bounds lake usage, not memory.
+	MaxUploadBytes int64 `env:"MAX_UPLOAD_BYTES" envDefault:"2147483648"`
 }
 
 // Load reads Config from the process environment, applying defaults for

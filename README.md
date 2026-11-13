@@ -129,10 +129,12 @@ embedded real service, not mock data. The caveats are the real limits.
 | **Settings** | Theme, accent, chart style and 12 interface skins, saved to Postgres | |
 | **Search (⌘K / Ctrl+K)** | Live search across screens, job types, Postgres tables and recent runs; picking a result opens that item directly | |
 
-| **Projects** | Create, switch and archive projects; job history is per project; `/` remembers the last one | Datasets, queries and dashboards are not per project yet, so Pipelines, Dashboards and Streaming only light up in the `nyc-taxi` sample |
+| **Projects** | Create, switch and archive projects; job history is per project; `/` remembers the last one | Pipelines, Dashboards and Streaming are still the taxi stages, so they only light up in the `nyc-taxi` sample |
+| **Datasets** | Upload a CSV/TSV/Parquet/JSON file (streamed to the lake) or give a URL; the worker converts it to Parquet, infers the schema and profiles every column | One Parquet part per dataset; CSV types are inferred, not reviewable yet |
+| **SQL over the lake** | The SQL Editor runs DuckDB over a project's datasets (each a view named after it) through the internal `query-engine` service, with the S3 secret scoped to the project, local files disabled and a per-query timeout | The taxi sample still queries Postgres |
 
-**Not built yet:** per-project datasets (upload / URL ingest), DuckDB over
-the lake, generic connectors, a config-driven pipeline builder, scheduling,
+**Not built yet:** generic job registry and rules-as-data (the taxi stages
+are still code), saved queries and dashboards for any project, scheduling,
 the assistant, and auth. See [`ideas/vision-and-roadmap.md`](ideas/vision-and-roadmap.md).
 
 ## Architecture
@@ -246,8 +248,9 @@ Two lists are kept in sync by hand:
   [frontend/src/shared/layout/navigation.ts](frontend/src/shared/layout/navigation.ts).
 
 Tests run in CI ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)):
-`go test ./...` in `control-plane`, `python -m pytest` in `worker`, and
-`npm test` (vitest) plus `tsc -b` in `frontend`. The Silver rule set also
+`go test ./...` in `control-plane`, `python -m pytest` in `worker`,
+`libs/openscale` and `query-engine`, and `npm test` (vitest) plus `tsc -b`
+in `frontend`. The Silver rule set also
 has a golden check against the original pipeline's quality reports:
 `cd worker && python scripts/golden_check.py 2024-07` (needs that month's
 raw Parquet under `worker/data/raw/yellow_taxi/`).

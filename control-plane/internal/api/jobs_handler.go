@@ -24,20 +24,18 @@ const workerContainerName = "openscale-worker"
 // JobsHandler serves the job-trigger and job-history endpoints -- the
 // read/write surface backing the frontend's Pipelines domain.
 type JobsHandler struct {
-	db      *db.DB
-	redis   *redis.Client
-	watcher *docker.Watcher
+	db         *db.DB
+	redis      *redis.Client
+	watcher    *docker.Watcher
+	dispatcher *Dispatcher
 }
 
 func NewJobsHandler(database *db.DB, redisClient *redis.Client, watcher *docker.Watcher) *JobsHandler {
-	return &JobsHandler{db: database, redis: redisClient, watcher: watcher}
+	return &JobsHandler{db: database, redis: redisClient, watcher: watcher, dispatcher: NewDispatcher(database, redisClient)}
 }
 
-// Run handles POST /api/projects/{projectId}/jobs/{type}/run. It inserts the queued row first
-// (so a job_id exists immediately, even if enqueuing or the worker is
-// briefly unavailable) and only then enqueues onto Redis -- if enqueuing
-// fails, the row is marked failed right away rather than left lying about
-// being queued.
+// Run handles POST /api/projects/{projectId}/jobs/{type}/run. See
+// Dispatcher for the insert-then-enqueue contract.
 func (h *JobsHandler) Run(w http.ResponseWriter, r *http.Request) {
 	project, _ := ProjectFromContext(r.Context())
 	jobType := chi.URLParam(r, "type")
@@ -51,52 +49,14 @@ func (h *JobsHandler) Run(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "failed to read request body", http.StatusBadRequest)
 		return
 	}
-	if len(params) == 0 {
-		params = []byte("{}")
-	}
 
 	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 	defer cancel()
 
-	run, err := h.db.InsertJobRun(ctx, project.ID, jobType, params)
+	run, err := h.dispatcher.Dispatch(ctx, project.ID, jobType, params)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
-	}
-
-	// The Redis-enqueued copy gets job_id merged in so the worker (replay.py
-	// specifically, for its live control hash) knows its own run id --
-	// the DB row keeps the original submitted params untouched, for audit
-	// fidelity.
-	var paramsMap map[string]any
-	if err := json.Unmarshal(params, &paramsMap); err != nil {
-		paramsMap = map[string]any{}
-	}
-	paramsMap["job_id"] = run.ID
-	paramsMap["project_id"] = run.ProjectID
-	enqueueParams, err := json.Marshal(paramsMap)
-	if err != nil {
-		errMsg := "failed to encode enqueue params: " + err.Error()
-		_ = h.db.MarkFailed(ctx, run.ID, errMsg)
-		run.Status = jobs.StatusFailed
-		run.Error = &errMsg
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusAccepted)
-		_ = json.NewEncoder(w).Encode(run)
-		return
-	}
-
-	enqueueErr := h.redis.EnqueueJob(ctx, redis.JobRequest{
-		JobID:       run.ID,
-		JobType:     jobType,
-		Params:      enqueueParams,
-		SubmittedAt: run.SubmittedAt.Format(time.RFC3339),
-	})
-	if enqueueErr != nil {
-		errMsg := "failed to enqueue: " + enqueueErr.Error()
-		_ = h.db.MarkFailed(ctx, run.ID, errMsg)
-		run.Status = jobs.StatusFailed
-		run.Error = &errMsg
 	}
 
 	w.Header().Set("Content-Type", "application/json")

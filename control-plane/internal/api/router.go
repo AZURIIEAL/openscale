@@ -13,6 +13,7 @@ import (
 	"github.com/AZURIIEAL/openscale/control-plane/internal/docker"
 	"github.com/AZURIIEAL/openscale/control-plane/internal/lake"
 	"github.com/AZURIIEAL/openscale/control-plane/internal/metrics"
+	"github.com/AZURIIEAL/openscale/control-plane/internal/queryengine"
 	"github.com/AZURIIEAL/openscale/control-plane/internal/redis"
 	"github.com/AZURIIEAL/openscale/control-plane/internal/streaming"
 	"github.com/AZURIIEAL/openscale/control-plane/internal/ws"
@@ -27,8 +28,10 @@ func NewRouter(
 	streamingClient *streaming.Client,
 	streamHub *streaming.StreamHub,
 	lakeClient *lake.Client,
+	engine *queryengine.Client,
 	m *metrics.Metrics,
 	frontendOrigin string,
+	maxUploadBytes int64,
 ) http.Handler {
 	r := chi.NewRouter()
 
@@ -60,6 +63,9 @@ func NewRouter(
 	queryHandler := NewQueryHandler(database)
 	streamingHandler := NewStreamingHandler(streamingClient, streamHub, frontendOrigin)
 	lakeHandler := NewLakeHandler(lakeClient)
+	dispatcher := NewDispatcher(database, redisClient)
+	datasetsHandler := NewDatasetsHandler(database, lakeClient, engine, dispatcher, maxUploadBytes)
+	projectQueryHandler := NewProjectQueryHandler(database, engine, maxQueryRows)
 	r.Route("/api", func(r chi.Router) {
 		// System-wide routes: the stack itself, not any one project.
 		r.Get("/system-health", healthHandler.ServeHTTP)
@@ -71,9 +77,9 @@ func NewRouter(
 		r.Get("/appearance-settings", appearanceHandler.Get)
 		r.Put("/appearance-settings", appearanceHandler.Update)
 
-		// Not yet project-scoped: the SQL editor reads Postgres as a whole,
-		// the lake browser lists fixed prefixes and streaming tails one
-		// topic. They move under /projects when datasets exist (Phase 2-3).
+		// Not yet project-scoped: the Postgres SQL editor (kept for the taxi
+		// sample's Gold tables), the fixed-prefix lake browser and the single
+		// streaming topic. They retire when the taxi stages become datasets.
 		r.Post("/query", queryHandler.Run)
 		r.Get("/query/catalog", queryHandler.Catalog)
 		r.Get("/streaming/topics", streamingHandler.Topics)
@@ -102,6 +108,18 @@ func NewRouter(
 
 			r.Get("/dashboards/overview", dashboardsHandler.Overview)
 			r.Get("/home/stats", dashboardsHandler.HomeStats)
+
+			r.Get("/datasets", datasetsHandler.List)
+			r.Post("/datasets", datasetsHandler.Create)
+			r.Get("/datasets/{name}", datasetsHandler.Get)
+			r.Delete("/datasets/{name}", datasetsHandler.Delete)
+			r.Post("/datasets/{name}/files", datasetsHandler.AddFile)
+			r.Get("/datasets/{name}/preview", datasetsHandler.Preview)
+			r.Get("/datasets/{name}/profile", datasetsHandler.Profile)
+
+			// The project's own SQL editor backend: DuckDB over its datasets.
+			r.Post("/query", projectQueryHandler.Run)
+			r.Get("/query/catalog", projectQueryHandler.Catalog)
 		})
 	})
 
