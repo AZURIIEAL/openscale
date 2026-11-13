@@ -51,7 +51,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 24
       # package-lock.json predates vitest and npm's resolver crashes when it
       # tries to reconcile the two, so resolve fresh for now. Run
       # `npm install` locally, commit the lockfile, then switch to `npm ci`.
