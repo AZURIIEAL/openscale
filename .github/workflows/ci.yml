@@ -52,12 +52,10 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: npm
-          cache-dependency-path: frontend/package-lock.json
-      # `npm install`, not `npm ci`, until package-lock.json is regenerated
-      # with vitest in it (run `npm install` locally and commit the lockfile,
-      # then switch this back to `npm ci`).
-      - run: npm install --no-audit --no-fund
+      # package-lock.json predates vitest and npm's resolver crashes when it
+      # tries to reconcile the two, so resolve fresh for now. Run
+      # `npm install` locally, commit the lockfile, then switch to `npm ci`.
+      - run: npm install --no-package-lock --no-audit --no-fund
       - run: npm run lint
       - run: npx tsc -b
       - run: npm test
