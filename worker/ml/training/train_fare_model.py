@@ -26,25 +26,14 @@ from sklearn.ensemble import RandomForestRegressor
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 from sklearn.model_selection import train_test_split
 
+from ml.tracking import use_experiment
 from spark.common.loader import load_silver_trips
 from spark.common.spark_session import get_spark
 
-MLFLOW_DIR = REPO_ROOT / "ml" / "mlflow"
-MLFLOW_TRACKING_URI = f"sqlite:///{(MLFLOW_DIR / 'mlflow.db').as_posix()}"
-MLFLOW_ARTIFACT_LOCATION = (MLFLOW_DIR / "artifacts").as_uri()
 EXPERIMENT_NAME = "fare-prediction"
 FEATURE_COLUMNS = ["trip_distance", "PULocationID", "DOLocationID", "passenger_count", "pickup_hour"]
 TARGET_COLUMN = "fare_amount"
 SAMPLE_SIZE = 300_000
-
-
-def ensure_experiment() -> None:
-    MLFLOW_DIR.mkdir(parents=True, exist_ok=True)
-    mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
-    client = mlflow.tracking.MlflowClient()
-    if client.get_experiment_by_name(EXPERIMENT_NAME) is None:
-        client.create_experiment(EXPERIMENT_NAME, artifact_location=MLFLOW_ARTIFACT_LOCATION)
-    mlflow.set_experiment(EXPERIMENT_NAME)
 
 
 def prepare_dataset(df: SparkDataFrame) -> pd.DataFrame:
@@ -67,7 +56,7 @@ def prepare_dataset(df: SparkDataFrame) -> pd.DataFrame:
 
 
 def train() -> dict:
-    ensure_experiment()
+    use_experiment(EXPERIMENT_NAME)
 
     spark = get_spark("ml-train-fare-model")
     try:

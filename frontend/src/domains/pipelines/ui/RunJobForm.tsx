@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { RunButton } from '@/shared/design-system/RunButton';
 import { Toggle } from '@/shared/design-system/Toggle';
 import { useDatasets } from '@/domains/datasets/application/useDatasets';
+import type { Dataset } from '@/domains/datasets/domain/entities';
 import type { ParamSpec, ParamValues } from '../domain/entities';
 import { initialParamValues, paramErrors, paramsFromValues } from '../domain/rules';
 
@@ -90,10 +91,14 @@ function MonthYearField({ spec, value, onChange }: { spec: ParamSpec; value: str
   );
 }
 
-/** Ready datasets in the current project, for `dataset` fields. */
-function DatasetField({ value, onChange }: { value: string; onChange: (v: string) => void }) {
-  const { data, isLoading } = useDatasets();
-  const ready = (data ?? []).filter((d) => d.status === 'ready');
+/** The project's ready datasets, shared by dataset and column fields. */
+interface DatasetChoices {
+  ready: Dataset[];
+  isLoading: boolean;
+}
+
+function DatasetField({ value, onChange, choices }: { value: string; onChange: (v: string) => void; choices: DatasetChoices }) {
+  const { ready, isLoading } = choices;
   return (
     <select className={inputClass} style={inputStyle} value={value} onChange={(e) => onChange(e.target.value)}>
       <option value="">{isLoading ? 'Loading…' : ready.length ? 'Choose a dataset' : 'No ready datasets'}</option>
@@ -106,12 +111,89 @@ function DatasetField({ value, onChange }: { value: string; onChange: (v: string
   );
 }
 
-function ParamInput({ spec, value, onChange }: { spec: ParamSpec; value: string; onChange: (v: string) => void }) {
+/** Columns of the dataset picked in the field this one is `of`. */
+function columnsOf(spec: ParamSpec, values: ParamValues, choices: DatasetChoices): string[] {
+  const picked = spec.of ? values[spec.of] : undefined;
+  const dataset = choices.ready.find((d) => d.name === picked);
+  return dataset ? dataset.columns.map((c) => c.name) : [];
+}
+
+function ColumnsField({ columns, value, onChange }: { columns: string[]; value: string[]; onChange: (v: string[]) => void }) {
+  if (columns.length === 0) {
+    return (
+      <span className="os-font-mono text-[12px]" style={{ color: 'var(--text-muted)' }}>
+        Choose a dataset first
+      </span>
+    );
+  }
+  return (
+    <div className="os-well flex max-h-40 flex-col gap-1 overflow-y-auto rounded-lg px-2.5 py-2" style={{ minWidth: '12rem' }}>
+      {columns.map((c) => (
+        <label key={c} className="os-font-mono flex items-center gap-2 text-[12.5px]" style={{ color: 'var(--text-body)' }}>
+          <input
+            type="checkbox"
+            checked={value.includes(c)}
+            onChange={(e) => onChange(e.target.checked ? [...value, c] : value.filter((v) => v !== c))}
+          />
+          {c}
+        </label>
+      ))}
+    </div>
+  );
+}
+
+interface ParamInputProps {
+  spec: ParamSpec;
+  value: string | string[];
+  values: ParamValues;
+  choices: DatasetChoices;
+  onChange: (v: string | string[]) => void;
+}
+
+function ParamInput({ spec, value: rawValue, values, choices, onChange }: ParamInputProps) {
+  const value = typeof rawValue === 'string' ? rawValue : '';
   switch (spec.type) {
     case 'month':
       return <MonthYearField spec={spec} value={value} onChange={onChange} />;
     case 'dataset':
-      return <DatasetField value={value} onChange={onChange} />;
+      return <DatasetField value={value} onChange={onChange} choices={choices} />;
+    case 'columns':
+      return <ColumnsField columns={columnsOf(spec, values, choices)} value={Array.isArray(rawValue) ? rawValue : []} onChange={onChange} />;
+    case 'column': {
+      const columns = columnsOf(spec, values, choices);
+      return (
+        <select className={inputClass} style={inputStyle} value={value} onChange={(e) => onChange(e.target.value)}>
+          <option value="">{columns.length ? 'Choose a column' : 'Choose a dataset first'}</option>
+          {columns.map((c) => (
+            <option key={c} value={c}>
+              {c}
+            </option>
+          ))}
+        </select>
+      );
+    }
+    case 'text':
+      return (
+        <textarea
+          className={inputClass}
+          style={{ ...inputStyle, width: 'min(44rem, 80vw)', minHeight: '7rem', resize: 'vertical' }}
+          spellCheck={false}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+        />
+      );
+    case 'dataset_name':
+      return (
+        <input
+          className={inputClass}
+          style={inputStyle}
+          placeholder="new_dataset"
+          autoCapitalize="off"
+          spellCheck={false}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+        />
+      );
     case 'boolean':
       return <Toggle checked={value === 'true'} onChange={(checked) => onChange(String(checked))} label={spec.label} />;
     case 'enum':
@@ -172,6 +254,12 @@ function ParamInput({ spec, value, onChange }: { spec: ParamSpec; value: string;
 export function RunJobForm({ schema, pending, onSubmit, submitLabel = 'Start run' }: RunJobFormProps) {
   const [values, setValues] = useState<ParamValues>(() => initialParamValues(schema));
   const errors = useMemo(() => paramErrors(schema, values), [schema, values]);
+  const usesDatasets = schema.some((p) => p.type === 'dataset');
+  const datasetsQuery = useDatasets();
+  const choices: DatasetChoices = {
+    ready: usesDatasets ? (datasetsQuery.data ?? []).filter((d) => d.status === 'ready') : [],
+    isLoading: datasetsQuery.isLoading,
+  };
   const canSubmit = Object.keys(errors).length === 0 && !pending;
 
   return (
@@ -185,12 +273,30 @@ export function RunJobForm({ schema, pending, onSubmit, submitLabel = 'Start run
       {schema.map((spec) => {
         // "Required" is what the disabled button already says; only show
         // errors about something the user actually entered.
-        const error = errors[spec.name] && (values[spec.name] ?? '') !== '' ? errors[spec.name] : null;
+        const Wrapper = spec.type === 'columns' ? 'div' : 'label';
+        const entered = values[spec.name];
+        const error = errors[spec.name] && typeof entered === 'string' && entered !== '' ? errors[spec.name] : null;
         const field = (
-          <ParamInput spec={spec} value={values[spec.name] ?? ''} onChange={(v) => setValues((prev) => ({ ...prev, [spec.name]: v }))} />
+          <ParamInput
+            spec={spec}
+            value={values[spec.name] ?? ''}
+            values={values}
+            choices={choices}
+            onChange={(v) =>
+              setValues((prev) => {
+                const next = { ...prev, [spec.name]: v };
+                // A new dataset invalidates the columns picked from the old one.
+                for (const other of schema) {
+                  if (other.of === spec.name) next[other.name] = other.type === 'columns' ? [] : '';
+                }
+                return next;
+              })
+            }
+          />
         );
         return (
-          <label key={spec.name} className="flex flex-col gap-1" title={spec.description}>
+          // A columns field holds its own checkbox labels, and labels can't nest.
+          <Wrapper key={spec.name} className="flex flex-col gap-1" title={spec.description}>
             {spec.type !== 'boolean' && (
               <span className={labelClass} style={{ color: 'var(--text-subtle)' }}>
                 {spec.label}
@@ -203,7 +309,7 @@ export function RunJobForm({ schema, pending, onSubmit, submitLabel = 'Start run
                 {error}
               </span>
             )}
-          </label>
+          </Wrapper>
         );
       })}
       <RunButton type="submit" disabled={!canSubmit}>

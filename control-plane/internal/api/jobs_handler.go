@@ -66,6 +66,9 @@ func (h *JobsHandler) Run(w http.ResponseWriter, r *http.Request) {
 	defer cancel()
 
 	def, err := h.db.GetJobDefinition(ctx, jobType)
+	if err == nil {
+		err = def.CheckAvailable(project.HasFeature)
+	}
 	if err != nil {
 		writeJobErr(w, err)
 		return
@@ -248,7 +251,7 @@ func (h *JobsHandler) Control(w http.ResponseWriter, r *http.Request) {
 // writeJobErr maps the job domain's errors to HTTP statuses.
 func writeJobErr(w http.ResponseWriter, err error) {
 	switch {
-	case errors.Is(err, jobs.ErrInvalidParams):
+	case errors.Is(err, jobs.ErrInvalidParams), errors.Is(err, jobs.ErrUnavailable):
 		http.Error(w, err.Error(), http.StatusBadRequest)
 	case errors.Is(err, db.ErrNotFound):
 		http.Error(w, "unknown job type", http.StatusNotFound)

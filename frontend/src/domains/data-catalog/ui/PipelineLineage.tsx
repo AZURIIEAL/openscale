@@ -3,7 +3,8 @@ import { Well } from '@/shared/design-system/Well';
 import { StatusPill } from '@/shared/design-system/StatusPill';
 import { useJobRunsPage } from '@/domains/pipelines/application/useJobRuns';
 import { useJobCatalog } from '@/domains/pipelines/application/useJobCatalog';
-import { listedJobs } from '@/domains/pipelines/domain/rules';
+import { PIPELINE_ORDER } from '@/domains/pipelines/application/useRunAllJobs';
+import type { JobDefinition } from '@/domains/pipelines/domain/entities';
 import type { JobRun, JobState } from '@/domains/pipelines/domain/entities';
 
 const RUN_STATUS_MAP: Record<JobState, { status: 'good' | 'warn' | 'crit'; label: string }> = {
@@ -26,10 +27,10 @@ function latestRunFor(runs: JobRun[] | undefined, jobType: string): JobRun | und
 }
 
 /**
- * Static, honest stage flow diagram -- the listed jobs of the job catalog
- * the worker publishes, in catalog order (Bronze/Ingest -> Silver -> Gold
- * -> Features -> Train for the taxi sample), the same list the Pipelines
- * screen shows, rather than any computed/discovered lineage:
+ * Static, honest stage flow diagram of the taxi sample's chain (Bronze/Ingest
+ * -> Silver -> Gold -> Features -> fare model), the same steps and order Run
+ * All drives, with labels and descriptions from the job catalog the worker
+ * publishes -- rather than any computed/discovered lineage:
  * this app doesn't track column-level or table-level lineage anywhere, so
  * inventing one here would be exactly the kind of fabricated relationship
  * this feature is meant to avoid. The optional "last run" badge is a real
@@ -39,7 +40,10 @@ function latestRunFor(runs: JobRun[] | undefined, jobType: string): JobRun | und
 export function PipelineLineage() {
   const { data } = useJobRunsPage(0);
   const runs = data?.runs;
-  const stages = listedJobs(useJobCatalog().data ?? []);
+  const catalog = useJobCatalog().data ?? [];
+  const stages = PIPELINE_ORDER.map((type) => catalog.find((job) => job.type === type)).filter(
+    (job): job is JobDefinition => job !== undefined,
+  );
 
   return (
     <Panel className="flex flex-col gap-3 p-4">

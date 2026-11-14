@@ -71,8 +71,8 @@ Every route is registered in
 | GET | `/api/container-stats` | Per-container CPU/memory plus host totals |
 | GET / POST | `/api/projects` | List projects · create one (`{"name", "slug"?, "description"?}`, slug derived from the name when omitted) |
 | GET / PATCH / DELETE | `/api/projects/{p}` | One project · rename/describe/`aiSettings` · archive (runs are kept). `{p}` is the id **or the slug** everywhere below |
-| GET | `/api/jobs/catalog` | Every job type the worker publishes: label, description, stage, `listed`, `paramsSchema` |
-| POST | `/api/projects/{p}/jobs/{type}/run` | Queue a job. Body = JSON params, validated against the type's `paramsSchema` (`400` if they don't fit, `404` for a type not in the catalog). Returns the run (`202`) |
+| GET | `/api/jobs/catalog` | Every job type the worker publishes: label, description, stage, `listed`, `requiresFeature`, `paramsSchema` |
+| POST | `/api/projects/{p}/jobs/{type}/run` | Queue a job. Body = JSON params, validated against the type's `paramsSchema` (`400` if they don't fit or the project lacks the job's `requiresFeature`, `404` for a type not in the catalog). Returns the run (`202`) |
 | GET | `/api/projects/{p}/jobs/runs?limit=&offset=` | Page of the project's runs, newest first, plus `hasMore` |
 | DELETE | `/api/projects/{p}/jobs/runs` | Delete the project's finished runs (queued/running are kept) |
 | POST | `/api/projects/{p}/jobs/cancel-all` | Cancel the project's queued and running runs. Running jobs are stopped by the worker; the worker container keeps running |
@@ -82,7 +82,7 @@ Every route is registered in
 | GET | `/api/projects/{p}/home/stats` | Home stat cards |
 | GET / POST | `/api/projects/{p}/datasets` | List datasets · create one: `multipart/form-data` (`name`?, `layer`?, `file`) streams the file to the lake and queues `dataset_ingest`; JSON `{"name"?, "layer"?, "url"}` queues `dataset_fetch` (download + ingest). Returns `202 {dataset, run}` |
 | GET / DELETE | `/api/projects/{p}/datasets/{name}` | One dataset (schema, counts, status, error) · delete it and its lake files |
-| POST | `/api/projects/{p}/datasets/{name}/files` | Add another raw file (multipart); the dataset is re-ingested |
+| POST | `/api/projects/{p}/datasets/{name}/files` | Add another raw file (multipart); the dataset is re-ingested. `409` for a derived dataset (a job's output) |
 | GET | `/api/projects/{p}/datasets/{name}/preview?limit=20` | First rows, via the query engine |
 | GET | `/api/projects/{p}/datasets/{name}/profile` | Per-column stats (stored at ingest; `?refresh=1` recomputes) |
 | POST | `/api/projects/{p}/query` | Read-only SQL over the project's datasets (DuckDB query engine; each dataset is a view named after it). Same body/response contract as `/api/query` |

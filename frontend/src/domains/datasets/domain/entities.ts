@@ -3,9 +3,15 @@ export type DatasetStatus = 'pending' | 'ready' | 'failed';
 export type DatasetLayer = 'bronze' | 'silver' | 'gold';
 
 export interface DatasetSource {
-  kind: 'upload' | 'url';
+  /** `derived`: written by a job (validate, sql_transform) from other datasets. */
+  kind: 'upload' | 'url' | 'derived';
   url?: string;
   filename?: string;
+  /** For derived datasets: the job, its run and the datasets it read (lineage). */
+  job?: string;
+  runId?: string;
+  inputs?: string[];
+  engine?: string;
 }
 
 export interface DatasetColumn {

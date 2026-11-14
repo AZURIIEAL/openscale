@@ -44,6 +44,9 @@ const (
 const (
 	SourceUpload = "upload"
 	SourceURL    = "url"
+	// SourceDerived: written by a job (validate, sql_transform) from other
+	// datasets, not from raw files. The worker creates these rows.
+	SourceDerived = "derived"
 )
 
 // Source is the JSON blob stored in datasets.source.
@@ -54,6 +57,12 @@ type Source struct {
 	// Filename is the original client file name for SourceUpload, kept for
 	// display only; the stored object is named by the handler.
 	Filename string `json:"filename,omitempty"`
+	// Job, RunID, Inputs and Engine are set for SourceDerived: which job
+	// wrote the dataset, in which run, from which datasets (lineage).
+	Job    string   `json:"job,omitempty"`
+	RunID  string   `json:"runId,omitempty"`
+	Inputs []string `json:"inputs,omitempty"`
+	Engine string   `json:"engine,omitempty"`
 }
 
 // Column is one entry of datasets.columns, written by the ingest job from

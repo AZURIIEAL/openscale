@@ -13,7 +13,7 @@ session needs.
 | 1 Projects (`/p/{slug}`, `/api/projects/{p}`) | done | PR #1 |
 | 2 Datasets (upload / URL, fetch + ingest jobs) | done | PR #2 |
 | 3 Query engine (DuckDB service, project SQL) | done | PR #2 |
-| 4 Jobs, rules and pipelines as data; taxi → sample project | **in progress**: 4a done, 4b next | 4a: branch `phase-4a-job-registry` |
+| 4 Jobs, rules and pipelines as data; taxi → sample project | **in progress**: 4a, 4b done; 4c next | 4a: `phase-4a-job-registry`; 4b: `phase-4b-generic-jobs` |
 | 5 Saved queries + dashboards; streaming passthrough | pending | — |
 | 6 MCP server with read-only tools | pending | — |
 | 7 Suggestions (heuristics, agent proposals, inbox) | pending | — |
@@ -27,9 +27,10 @@ Milestone 1 ("upload a CSV and query it") is complete on `main`.
 - The query engine uses the shared MinIO root credentials; give it a read-only
   user (Phase 9).
 - Image tags: only Kafka and Prometheus are pinned in `docker-compose.yml`.
-- Pipelines is still gated by `legacy_taxi`. The job catalog is global, so un-gating
-  now would show the taxi stages in every project; do it in 4b, when generic jobs
-  exist (likely with a per-job "applies to" rule or a taxi-only flag on the five stages).
+- Dataset rules can only be set in SQL until 4c adds the editor and API
+  (`UPDATE control_plane.datasets SET rules = '[...]'`).
+- The taxi `train` job is now `fare_model` (migration 0008 renamed its run history);
+  Dashboards' model-quality queries read `fare_model` until Phase 5 replaces them.
 - `replay` spends about 85 s in Spark loading all of Silver before its first send. A
   cancel during that load waits out the runner's 5 s grace and is then terminated, which
   is fine, but it makes the Streaming screen slow to start. Phase 5 replaces it.
@@ -75,7 +76,8 @@ cd worker && python scripts/golden_check.py 2024-07   # Silver rules vs stored q
 Slices, in order (each a PR): ~~**4a** job registry~~ (done: `@job` in `worker/registry.py`,
 `job_definitions` + `GET /api/jobs/catalog`, params validated in `internal/jobs/definitions.go`,
 `RunJobForm` generated from `paramsSchema`, one child process per run) → **4b** generic
-`validate` / `sql_transform` / `train` job types → **4c** rules as JSON on `datasets.rules` with
+`validate` / `sql_transform` / `train` job types (done: rule engine in `libs/openscale/rules.py`,
+derived datasets with lineage in `source`, `requires_feature` on jobs) → **4c** rules as JSON on `datasets.rules` with
 the golden check passing on the ten taxi rules → **4d** `pipelines` / `pipeline_runs` tables and a
 server-side orchestrator that reconciles from Postgres → **4e** `samples/nyc_taxi/project.json`,
 import/export, delete the taxi code and the `legacy_taxi` flag.

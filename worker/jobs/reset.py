@@ -64,6 +64,7 @@ def delete_online_features() -> str:
     "Clear Data",
     "Wipe Bronze/Silver/Gold objects in MinIO and Gold/feature tables in Postgres.",
     listed=False,
+    requires_feature="legacy_taxi",
 )
 def reset(ctx: JobContext) -> None:
     ctx.log(truncate_postgres_tables())

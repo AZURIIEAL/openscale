@@ -17,13 +17,29 @@ export interface JobRun {
 }
 
 /** Field kinds a job's params schema may use -- mirrors PARAM_TYPES in
- * worker/registry.py. `dataset` is the name of a dataset in the project. */
-export type ParamType = 'string' | 'number' | 'integer' | 'boolean' | 'enum' | 'date' | 'month' | 'dataset';
+ * worker/registry.py. `text` is multi-line (SQL); `dataset` picks an
+ * existing dataset in the project and `dataset_name` names a new one;
+ * `column`/`columns` pick from the columns of the dataset field named by
+ * `of`. */
+export type ParamType =
+  | 'string'
+  | 'text'
+  | 'number'
+  | 'integer'
+  | 'boolean'
+  | 'enum'
+  | 'date'
+  | 'month'
+  | 'dataset'
+  | 'dataset_name'
+  | 'column'
+  | 'columns';
 
 /** One field of a job's params schema, as the worker publishes it
  * (worker/registry.py's Param; control-plane jobs.ParamSpec). `min`/`max`
  * are numbers for number/integer fields and ISO strings for date/month
- * fields; `gte` names an earlier field this one must not be before. */
+ * fields; `gte` names an earlier field this one must not be before; `of`
+ * names the dataset field a column/columns field picks from. */
 export interface ParamSpec {
   name: string;
   type: ParamType;
@@ -35,6 +51,7 @@ export interface ParamSpec {
   min?: number | string;
   max?: number | string;
   gte?: string;
+  of?: string;
 }
 
 /** One job type from GET /api/jobs/catalog. The worker publishes the
@@ -49,10 +66,14 @@ export interface JobDefinition {
   /** False for jobs another screen queues (replay, reset, dataset jobs);
    * they stay out of the Pipelines run list. */
   listed: boolean;
+  /** A project feature flag the job needs (the taxi stages need
+   * legacy_taxi); the control-plane refuses it in other projects. */
+  requiresFeature?: string;
   paramsSchema: ParamSpec[];
 }
 
 /** Raw form state: every field is edited as a string (checkboxes as
- * 'true'/'false'), and paramsFromValues() turns it into the typed body
- * the run endpoint validates. */
-export type ParamValues = Record<string, string>;
+ * 'true'/'false'), except `columns` fields, which hold the picked names;
+ * paramsFromValues() turns it into the typed body the run endpoint
+ * validates. */
+export type ParamValues = Record<string, string | string[]>;

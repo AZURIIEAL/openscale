@@ -94,6 +94,10 @@ func (h *DatasetsHandler) AddFile(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	if ds.Source.Kind == datasets.SourceDerived {
+		http.Error(w, "this dataset is written by the "+ds.Source.Job+" job; re-run that job instead of adding files", http.StatusConflict)
+		return
+	}
 	mediaType, _, _ := mime.ParseMediaType(r.Header.Get("Content-Type"))
 	if mediaType != "multipart/form-data" {
 		http.Error(w, "expected multipart/form-data", http.StatusUnsupportedMediaType)

@@ -118,12 +118,12 @@ embedded real service, not mock data. The caveats are the real limits.
 | Screen | What's real | Limits |
 |---|---|---|
 | **Home** | Live container CPU/memory gauges, job history, Gold-backed revenue trend and stat cards | |
-| **Pipelines** | Triggers the real job queue end to end (control-plane → Redis → worker → Postgres), live status and logs over WebSocket, run forms generated from the job catalog, run-all chaining, Stop all (stops just the jobs' processes, not the worker), clear data | Run All is a fixed taxi chain; pipelines as data come in Phase 4d |
+| **Pipelines** | Triggers the real job queue end to end (control-plane → Redis → worker → Postgres), live status and logs over WebSocket, run forms generated from the job catalog, run-all chaining, Stop all (stops just the jobs' processes, not the worker), clear data | Run All is the fixed taxi chain; pipelines as data come in Phase 4d. No rules editor yet (Phase 4c) |
 | **SQL Editor** | Read-only `SELECT`/`WITH` against Postgres (Gold tables, feature table, job history) inside a read-only transaction, schema browser, query history | Postgres only; Bronze/Silver Parquet in the lake isn't queryable yet |
 | **Data Catalog** | Postgres schema browser (row counts and sample rows) and a live MinIO lake browser (object counts and sizes per layer) | Lineage is a static diagram of the five stages, not computed; no Parquet preview |
 | **Streaming** | `replay` streams real Silver trips onto Kafka; the control-plane tails the topic and pushes live trips and windowed aggregates over WebSocket. Pause, resume, cancel and ×1–×10 speed act on the running replay | One topic, `yellow-taxi-trips` |
 | **Dashboards** | Gold-layer charts: daily revenue, hourly demand, top zones, congestion, ETL health. Chart style and theme can be re-skinned | Fixed set of charts, no custom builder |
-| **ML Workbench** | Embedded MLflow, tracking the same store the `train` job logs to | |
+| **ML Workbench** | Embedded MLflow, tracking the same store the `train` and `fare_model` jobs log to | |
 | **Notebooks** | Embedded JupyterLab, opened on three example notebooks | |
 | **Infrastructure** | Docker inspection of nine services, with start/stop/restart | |
 | **Settings** | Theme, accent, chart style and 12 interface skins, saved to Postgres | |
@@ -215,7 +215,7 @@ that folder) and run `docker compose restart grafana`.
 ```
 control-plane/   Go API: cmd/server + internal/{api,config,db,docker,health,jobs,lake,metrics,redis,streaming,ws}
 frontend/        React 19 + TypeScript + Vite console, one DDD-style domain per screen
-worker/          Python job worker: Spark ETL (ingest/silver/gold/features/train), Kafka replay, reset
+worker/          Python job worker: generic jobs (validate, sql_transform, train), the taxi sample's Spark ETL, Kafka replay
 jupyter/         JupyterLab image (embedded by the Notebooks screen)
 notebooks/       The example notebooks JupyterLab opens
 observability/   Prometheus scrape config + Grafana datasource/dashboards

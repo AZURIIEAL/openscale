@@ -14,6 +14,7 @@ from registry import JobContext, job
     "Silver -> zone x hour features, written to Postgres and Redis.",
     stage="Features",
     order=40,
+    requires_feature="legacy_taxi",
 )
 def features(ctx: JobContext) -> None:
     """One Spark aggregate-then-write. rows is compute_features' own

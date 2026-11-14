@@ -73,10 +73,15 @@ export function DatasetDetail({ dataset, onClose }: DatasetDetailProps) {
           )}
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <input ref={fileInput} type="file" hidden onChange={(e) => onPickFile(e.target.files?.[0])} />
-          <ActionButton onClick={() => fileInput.current?.click()} disabled={addFile.isPending}>
-            {addFile.isPending ? 'Uploading…' : 'Add file'}
-          </ActionButton>
+          {/* A job owns a derived dataset's files; re-run the job instead. */}
+          {dataset.source.kind !== 'derived' && (
+            <>
+              <input ref={fileInput} type="file" hidden onChange={(e) => onPickFile(e.target.files?.[0])} />
+              <ActionButton onClick={() => fileInput.current?.click()} disabled={addFile.isPending}>
+                {addFile.isPending ? 'Uploading…' : 'Add file'}
+              </ActionButton>
+            </>
+          )}
           <ActionButton onClick={openInSql} disabled={!ready}>
             Open in SQL
           </ActionButton>

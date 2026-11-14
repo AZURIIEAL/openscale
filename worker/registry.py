@@ -27,8 +27,24 @@ from jobs.outcome import STATUS_CANCELLED, STATUS_FAILED, STATUS_PARTIAL, STATUS
 
 # Field kinds a params_schema may use -- mirrored by
 # control-plane/internal/jobs (validation) and the frontend's RunJobForm
-# (rendering). `dataset` is the name of a dataset in the run's project.
-PARAM_TYPES = ("string", "number", "integer", "boolean", "enum", "date", "month", "dataset")
+# (rendering). `text` is multi-line (SQL); `dataset` picks an existing
+# dataset in the run's project and `dataset_name` names a new one;
+# `column`/`columns` pick from the columns of the dataset field named by `of`.
+PARAM_TYPES = (
+    "string",
+    "text",
+    "number",
+    "integer",
+    "boolean",
+    "enum",
+    "date",
+    "month",
+    "dataset",
+    "dataset_name",
+    "column",
+    "columns",
+)
+_COLUMN_TYPES = ("column", "columns")
 
 _TYPE_NAME = re.compile(r"^[a-z][a-z0-9_]{0,62}$")
 _PARAM_NAME = re.compile(r"^[A-Za-z][A-Za-z0-9_]{0,62}$")
@@ -42,6 +58,7 @@ class Param:
     min/max bound number and integer fields numerically, and date ("YYYY-MM-DD")
     and month ("YYYY-MM") fields as strings. gte names an earlier field of the
     same type this one must be greater than or equal to (an end after a start).
+    of names the earlier `dataset` field a column/columns field picks from.
     """
 
     name: str
@@ -54,6 +71,7 @@ class Param:
     min: float | str | None = None
     max: float | str | None = None
     gte: str | None = None
+    of: str | None = None
 
     def to_json(self) -> dict:
         out: dict[str, Any] = {"name": self.name, "type": self.type, "label": self.label}
@@ -71,6 +89,8 @@ class Param:
             out["max"] = self.max
         if self.gte:
             out["gte"] = self.gte
+        if self.of:
+            out["of"] = self.of
         return out
 
 
@@ -146,6 +166,7 @@ class JobDefinition:
     stage: str | None = None
     order: int = 100
     listed: bool = True
+    requires_feature: str | None = None
 
     @property
     def module(self) -> str:
@@ -162,6 +183,7 @@ class JobDefinition:
             "params_schema": [p.to_json() for p in self.params_schema],
             "listed": self.listed,
             "sort_order": self.order,
+            "requires_feature": self.requires_feature,
         }
 
 
@@ -191,6 +213,12 @@ def validate_schema(params_schema: tuple[Param, ...]) -> None:
                 raise ValueError(f"param {p.name!r}: gte must name an earlier param, not {p.gte!r}")
             if other.type != p.type or p.type not in _ORDERED_TYPES:
                 raise ValueError(f"param {p.name!r}: gte needs an earlier param of the same ordered type")
+        if p.type in _COLUMN_TYPES:
+            source = seen.get(p.of or "")
+            if source is None or source.type != "dataset":
+                raise ValueError(f"param {p.name!r}: of must name an earlier dataset param")
+        elif p.of is not None:
+            raise ValueError(f"param {p.name!r}: only column and columns take of")
         seen[p.name] = p
 
 
@@ -203,12 +231,15 @@ def job(
     stage: str | None = None,
     order: int = 100,
     listed: bool = True,
+    requires_feature: str | None = None,
 ) -> Callable[[Callable[[JobContext], None]], Callable[[JobContext], None]]:
     """Registers the decorated function as job type `type`.
 
     stage is an optional badge shown next to the label; order sorts the
     catalog; listed=False keeps a job out of the Pipelines run list (it can
-    still be queued by another screen or the API, as replay and reset are).
+    still be queued by another screen or the API, as replay and reset are);
+    requires_feature limits the job to projects with that feature flag (the
+    taxi stages need `legacy_taxi`), and the control-plane enforces it.
     """
     if not _TYPE_NAME.match(type):
         raise ValueError(f"job type {type!r} must be lowercase letters, digits and underscores")
@@ -227,6 +258,7 @@ def job(
             stage=stage,
             order=order,
             listed=listed,
+            requires_feature=requires_feature,
         )
         return fn
 

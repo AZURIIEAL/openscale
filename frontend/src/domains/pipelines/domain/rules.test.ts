@@ -68,13 +68,58 @@ const REPLAY: ParamSpec[] = [
 ];
 
 describe('listedJobs', () => {
+  const catalog = [
+    { type: 'ingest', listed: true, requiresFeature: 'legacy_taxi' },
+    { type: 'reset', listed: false, requiresFeature: 'legacy_taxi' },
+    { type: 'validate', listed: true },
+    { type: 'dataset_ingest', listed: false },
+  ] as JobDefinition[];
+
   it('keeps catalog order and drops unlisted jobs', () => {
-    const catalog = [
-      { type: 'ingest', listed: true },
-      { type: 'reset', listed: false },
-      { type: 'silver', listed: true },
-    ] as JobDefinition[];
-    expect(listedJobs(catalog).map((j) => j.type)).toEqual(['ingest', 'silver']);
+    expect(listedJobs(catalog, () => true).map((j) => j.type)).toEqual(['ingest', 'validate']);
+  });
+
+  it("hides jobs whose feature the project doesn't have", () => {
+    expect(listedJobs(catalog, () => false).map((j) => j.type)).toEqual(['validate']);
+    expect(listedJobs(catalog, (f) => f === 'legacy_taxi').map((j) => j.type)).toEqual(['ingest', 'validate']);
+  });
+});
+
+// What the worker publishes for train and sql_transform.
+const TRAIN: ParamSpec[] = [
+  { name: 'dataset', type: 'dataset', label: 'Dataset', required: true },
+  { name: 'target', type: 'column', label: 'Target column', required: true, of: 'dataset' },
+  { name: 'features', type: 'columns', label: 'Feature columns', of: 'dataset' },
+];
+const TRANSFORM: ParamSpec[] = [
+  { name: 'output', type: 'dataset_name', label: 'Output dataset', required: true },
+  { name: 'sql', type: 'text', label: 'SQL', required: true },
+];
+
+describe('column and text params', () => {
+  it('start columns fields empty and send picks as a list', () => {
+    expect(initialParamValues(TRAIN)).toEqual({ features: [] });
+    expect(paramsFromValues(TRAIN, { dataset: 'trips', target: 'fare', features: ['distance', 'zone'] })).toEqual({
+      dataset: 'trips',
+      target: 'fare',
+      features: ['distance', 'zone'],
+    });
+    // an empty pick means "let the job choose", so it is left out
+    expect(paramsFromValues(TRAIN, { dataset: 'trips', target: 'fare', features: [] })).toEqual({ dataset: 'trips', target: 'fare' });
+  });
+
+  it('requires a target but not features', () => {
+    expect(paramErrors(TRAIN, { dataset: 'trips', target: '', features: [] })).toEqual({ target: 'Required' });
+    expect(paramErrors(TRAIN, { dataset: 'trips', target: 'fare', features: [] })).toEqual({});
+  });
+
+  it('keeps SQL as typed and checks output names', () => {
+    const sql = 'SELECT zone,\n  count(*)\nFROM trips GROUP BY 1';
+    expect(paramsFromValues(TRANSFORM, { output: 'zone_totals', sql })).toEqual({ output: 'zone_totals', sql });
+    expect(paramErrors(TRANSFORM, { output: 'Zone Totals', sql })).toEqual({
+      output: 'Lowercase letters, digits and _; start with a letter',
+    });
+    expect(paramErrors(TRANSFORM, { output: 'zone_totals', sql: '   ' })).toEqual({ sql: 'Required' });
   });
 });
 

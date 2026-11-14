@@ -79,6 +79,10 @@ export function profileWarnings(c: ProfileColumn, rowCount: number): string[] {
 
 export function sourceLabel(ds: Dataset): string {
   if (ds.source.kind === 'url') return ds.source.url ?? 'url';
+  if (ds.source.kind === 'derived') {
+    const inputs = ds.source.inputs ?? [];
+    return `${ds.source.job ?? 'job'}${inputs.length ? ` · from ${inputs.join(', ')}` : ''}`;
+  }
   return ds.source.filename ? `upload · ${ds.source.filename}` : 'upload';
 }
 

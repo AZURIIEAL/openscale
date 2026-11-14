@@ -121,10 +121,12 @@ keys carry it second (`['pipelines', slug, 'runs', page]`), so switching
 projects never shows another project's cached data. The control-plane
 accepts the slug wherever its routes say `{projectId}`.
 
-Pipelines, Dashboards and Streaming are still hardcoded to the taxi
-pipeline, so `RequireFeature` gates them to the project flagged
-`legacy_taxi` (the `nyc-taxi` sample) until Phase 4 of the implementation
-plan makes them per-project rows.
+Dashboards and Streaming are still hardcoded to the taxi pipeline, so
+`RequireFeature` gates them to the project flagged `legacy_taxi` (the
+`nyc-taxi` sample) until Phases 4 and 5 make them per-project rows.
+Pipelines is open to every project: it lists the catalog jobs whose
+`requiresFeature` the project has, and only the taxi project gets Run All
+and Clear data.
 4. If it needs data, add the endpoint to the control-plane first, then an
    `http*Gateway` that calls it through `shared/api/httpClient`.
 

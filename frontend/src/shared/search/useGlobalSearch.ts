@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { NAV_ENTRIES, navHref } from '@/shared/layout/navigation';
 import { useCurrentProject } from '@/shared/project/useCurrentProject';
 import { useProjectsList } from '@/shared/project/useProjects';
-import { projectPath } from '@/shared/project/rules';
+import { hasFeature, projectPath } from '@/shared/project/rules';
 import { listedJobs } from '@/domains/pipelines/domain/rules';
 import { stateLabel, formatRunTime } from '@/domains/pipelines/domain/rules';
 import { httpJobsGateway } from '@/domains/pipelines/infrastructure/httpJobsGateway';
@@ -28,7 +28,7 @@ const EMPTY_RESULTS: SearchResults = { project: [], screen: [], job: [], table: 
 export function useGlobalSearch(query: string, enabled: boolean): { results: SearchResults; isLoading: boolean; total: number } {
   const trimmed = query.trim();
   const active = enabled && trimmed.length > 0;
-  const { slug } = useCurrentProject();
+  const { slug, project: currentProject } = useCurrentProject();
   const { data: projects } = useProjectsList();
   const target = useQueryTarget();
   const { data: jobCatalog } = useJobCatalog();
@@ -60,7 +60,7 @@ export function useGlobalSearch(query: string, enabled: boolean): { results: Sea
       .slice(0, MAX_RESULTS_PER_CATEGORY)
       .map((e) => ({ id: `screen:${e.path}`, category: 'screen' as const, title: e.label, subtitle: e.subtitle, path: navHref(e, slug || undefined) }));
 
-    const job = listedJobs(jobCatalog ?? [])
+    const job = listedJobs(jobCatalog ?? [], (feature) => hasFeature(currentProject, feature))
       .filter((j) => matchesQuery(trimmed, j.label, j.type, j.stage, j.description))
       .slice(0, MAX_RESULTS_PER_CATEGORY)
       .map((j) => ({
@@ -97,7 +97,7 @@ export function useGlobalSearch(query: string, enabled: boolean): { results: Sea
       }));
 
     return { project, screen, job, table, run };
-  }, [active, trimmed, slug, projects, jobCatalog, catalogQuery.data, runsQuery.data]);
+  }, [active, trimmed, slug, currentProject, projects, jobCatalog, catalogQuery.data, runsQuery.data]);
 
   const isLoading = active && (catalogQuery.isFetching || runsQuery.isFetching);
   const total = results.project.length + results.screen.length + results.job.length + results.table.length + results.run.length;

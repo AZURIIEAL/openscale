@@ -21,6 +21,7 @@ from registry import JobContext, JobFailed, Param, job
     ],
     stage="Bronze",
     order=10,
+    requires_feature="legacy_taxi",
 )
 def ingest(ctx: JobContext) -> None:
     """run_ingestion never raises for an individual period's UNAVAILABLE/

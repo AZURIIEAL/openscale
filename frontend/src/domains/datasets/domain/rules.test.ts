@@ -72,6 +72,10 @@ describe('formatters', () => {
   it('labels the source', () => {
     expect(sourceLabel(ds())).toBe('upload · orders.csv');
     expect(sourceLabel(ds({ source: { kind: 'url', url: 'https://x/y.csv' } }))).toBe('https://x/y.csv');
+    expect(sourceLabel(ds({ source: { kind: 'derived', job: 'sql_transform', inputs: ['orders', 'zones'] } }))).toBe(
+      'sql_transform · from orders, zones',
+    );
+    expect(sourceLabel(ds({ source: { kind: 'derived', job: 'validate', inputs: [] } }))).toBe('validate');
   });
 });
 

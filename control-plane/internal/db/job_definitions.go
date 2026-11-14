@@ -13,12 +13,12 @@ import (
 
 // The worker writes this table (worker/db.py's publish_job_definitions);
 // the control-plane only reads it.
-const jobDefinitionColumns = `type, label, description, COALESCE(stage, ''), params_schema, listed`
+const jobDefinitionColumns = `type, label, description, COALESCE(stage, ''), params_schema, listed, COALESCE(requires_feature, '')`
 
 func scanJobDefinition(row pgx.Row) (jobs.Definition, error) {
 	var d jobs.Definition
 	var schema []byte
-	if err := row.Scan(&d.Type, &d.Label, &d.Description, &d.Stage, &schema, &d.Listed); err != nil {
+	if err := row.Scan(&d.Type, &d.Label, &d.Description, &d.Stage, &schema, &d.Listed, &d.RequiresFeature); err != nil {
 		return jobs.Definition{}, err
 	}
 	d.ParamsSchema = []jobs.ParamSpec{}

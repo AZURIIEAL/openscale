@@ -34,3 +34,28 @@ def check_single_select(con: duckdb.DuckDBPyConnection, sql: str) -> None:
     # duckdb exposes the type as an enum; its str() is e.g. "StatementType.SELECT"
     if not kind.upper().endswith(("SELECT", "SELECT_STATEMENT")):
         raise RejectedSQL("Only SELECT queries are allowed.")
+
+
+def referenced_tables(con: duckdb.DuckDBPyConnection, sql: str) -> set[str]:
+    """Every table name the query reads, from DuckDB's parse tree (no binding,
+    so it works before any view exists). CTE names come back too; callers
+    intersect with the names they care about. Used for dataset lineage."""
+    import json
+
+    tree = json.loads(con.execute("SELECT json_serialize_sql(?)", [sql]).fetchone()[0])
+    if tree.get("error"):
+        raise RejectedSQL(tree.get("error_message") or "could not parse the SQL")
+    found: set[str] = set()
+
+    def walk(node) -> None:
+        if isinstance(node, dict):
+            if node.get("type") == "BASE_TABLE" and node.get("table_name"):
+                found.add(node["table_name"])
+            for value in node.values():
+                walk(value)
+        elif isinstance(node, list):
+            for value in node:
+                walk(value)
+
+    walk(tree)
+    return found
