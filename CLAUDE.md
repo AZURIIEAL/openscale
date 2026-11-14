@@ -23,8 +23,6 @@ session needs.
 Milestone 1 ("upload a CSV and query it") is complete on `main`.
 
 ### Known follow-ups
-- `frontend/package-lock.json` predates vitest. Run `cd frontend && npm install`,
-  commit the lockfile, then switch CI back to `npm ci` (`.github/workflows/ci.yml`).
 - CSV type review (Phase 2's second slice) is not built: inferred types are used as-is.
 - The query engine uses the shared MinIO root credentials; give it a read-only
   user (Phase 9).
