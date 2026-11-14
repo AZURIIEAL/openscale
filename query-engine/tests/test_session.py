@@ -1,6 +1,8 @@
 """Needs duckdb (runs in CI; skips elsewhere). Builds sessions over local
 Parquet files via a connection without httpfs, exercising the same
-run_select/preview/profile paths the service uses."""
+run_select/preview/profile paths the service uses. The `session` fixture
+skips lockdown() because its views read local files, which lockdown
+rightly forbids; `locked_session` covers that behaviour on its own."""
 
 import pytest
 
@@ -10,11 +12,23 @@ from openscale.duck import DatasetView, attach_views, lockdown  # noqa: E402
 from query_engine.session import Session  # noqa: E402
 
 
-@pytest.fixture
-def session(tmp_path):
+def _orders_connection(tmp_path):
     con = duckdb.connect()
     con.execute(f"COPY (SELECT range AS id, range * 1.5 AS amount, 'c' || (range % 3) AS city FROM range(100)) TO '{tmp_path / 'part-00000.parquet'}' (FORMAT PARQUET)")
     attach_views(con, [DatasetView(name="orders", path=str(tmp_path / "*.parquet"))])
+    return con
+
+
+@pytest.fixture
+def session(tmp_path):
+    s = Session(_orders_connection(tmp_path))
+    yield s
+    s.close()
+
+
+@pytest.fixture
+def locked_session(tmp_path):
+    con = _orders_connection(tmp_path)
     lockdown(con)
     s = Session(con)
     yield s
@@ -49,9 +63,14 @@ def test_non_select_is_rejected(session):
     assert "error" in session.run_select("COPY orders TO '/tmp/leak.csv'", 10, 10)
 
 
-def test_local_file_access_is_blocked(session, tmp_path):
-    out = session.run_select(f"SELECT * FROM read_parquet('{tmp_path / 'part-00000.parquet'}')", 10, 10)
+def test_local_file_access_is_blocked_after_lockdown(locked_session, tmp_path):
+    out = locked_session.run_select(f"SELECT * FROM read_parquet('{tmp_path / 'part-00000.parquet'}')", 10, 10)
     assert "error" in out
+    assert "LocalFileSystem" in out["error"]
+
+
+def test_config_changes_are_rejected_after_lockdown(locked_session):
+    assert "error" in locked_session.run_select("SET memory_limit = '10GB'", 10, 10)
 
 
 def test_timeout_cancels_a_long_query(session):
