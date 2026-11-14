@@ -12,10 +12,20 @@ import redis
 REDIS_ADDR = os.environ.get("REDIS_ADDR", "localhost:6379")
 EVENTS_CHANNEL = "openscale:jobs:events"
 
+# Must stay well above main.py's XREADGROUP block time (5 s). redis-py 8
+# defaults socket_timeout to 5 s, so an idle queue read timed out at the same
+# moment the block ended and crashed the worker.
+SOCKET_TIMEOUT_SECONDS = 30
+
 
 def get_client() -> "redis.Redis":
     host, _, port = REDIS_ADDR.partition(":")
-    return redis.Redis(host=host, port=int(port or 6379), decode_responses=True)
+    return redis.Redis(
+        host=host,
+        port=int(port or 6379),
+        decode_responses=True,
+        socket_timeout=SOCKET_TIMEOUT_SECONDS,
+    )
 
 
 def ensure_consumer_group(client: "redis.Redis", stream: str, group: str) -> None:
