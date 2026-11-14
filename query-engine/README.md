@@ -9,6 +9,7 @@ needs Postgres and project scoping stays in the control-plane.
 POST /query    {project_id, sql, datasets:[{name, path}], max_rows, timeout_seconds}
 POST /preview  {project_id, dataset:{name, path}, limit}
 POST /profile  {project_id, dataset:{name, path}}
+POST /rules/test {project_id, dataset:{name, path}, rules, check_only, timeout_seconds}
 GET  /healthz
 ```
 
@@ -16,6 +17,13 @@ GET  /healthz
 truncated, durationMs}`; a query-level failure (bad SQL, timeout) comes
 back as `{error}` with HTTP 200 so the editor can show it inline. Non-200
 means the service itself is unwell.
+
+`/rules/test` runs a dataset's quality rules with the worker's engine
+(`openscale.rules`): `check_only` just binds every condition (the
+control-plane's save check), otherwise it counts in one scan and answers
+`{rowsIn, rowsOut, rejected, quarantined, rules:[{id, tier, hits, assigned,
+flagged}], durationMs}`. A rule that doesn't parse or bind is `{error}`
+naming it.
 
 ## How a query runs (query_engine/session.py)
 

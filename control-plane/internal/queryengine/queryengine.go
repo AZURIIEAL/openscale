@@ -114,6 +114,43 @@ func (c *Client) ProfileDataset(ctx context.Context, projectID string, ds Datase
 	return out, nil
 }
 
+// RuleStats is one rule's counts from a rules test (see
+// libs/openscale/openscale/rules.py's RuleStats).
+type RuleStats struct {
+	ID       string `json:"id"`
+	Tier     string `json:"tier"`
+	Note     string `json:"note"`
+	Hits     int64  `json:"hits"`
+	Assigned *int64 `json:"assigned"`
+	Flagged  *int64 `json:"flagged"`
+}
+
+// RulesResult answers /rules/test: Error is set when a rule doesn't parse
+// or bind (naming the rule) or the test timed out; the counts are only set
+// when the rules were counted, not just checked.
+type RulesResult struct {
+	OK          bool        `json:"ok,omitempty"`
+	RowsIn      *int64      `json:"rowsIn,omitempty"`
+	RowsOut     *int64      `json:"rowsOut,omitempty"`
+	Rejected    *int64      `json:"rejected,omitempty"`
+	Quarantined *int64      `json:"quarantined,omitempty"`
+	Rules       []RuleStats `json:"rules,omitempty"`
+	DurationMs  int64       `json:"durationMs,omitempty"`
+	Error       string      `json:"error,omitempty"`
+}
+
+// TestRules runs a dataset's rules in the query engine: with checkOnly,
+// only that every predicate binds against the dataset; otherwise what a
+// validate run would keep, remove and flag, per rule. Nothing is written.
+func (c *Client) TestRules(ctx context.Context, projectID string, ds DatasetRef, rules any, checkOnly bool) (RulesResult, error) {
+	var out RulesResult
+	body := map[string]any{"project_id": projectID, "dataset": ds, "rules": rules, "check_only": checkOnly}
+	if err := c.post(ctx, "/rules/test", body, &out); err != nil {
+		return RulesResult{}, err
+	}
+	return out, nil
+}
+
 func (c *Client) post(ctx context.Context, path string, body any, out any) error {
 	payload, err := json.Marshal(body)
 	if err != nil {

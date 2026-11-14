@@ -4,7 +4,7 @@ import pytest
 
 duckdb = pytest.importorskip("duckdb")
 
-from openscale.rules import InvalidRule, Rule, apply_rules, parse_rules  # noqa: E402
+from openscale.rules import InvalidRule, Rule, apply_rules, count_rules, parse_rules  # noqa: E402
 
 # id, pickup, dropoff, distance, fare, passengers
 ROWS = [
@@ -107,7 +107,7 @@ def test_no_rules_copies_the_data(con, source, tmp_path):
 def test_report_shape(con, source, tmp_path):
     report = _run(con, source, tmp_path, RULES[:1])[0].report()
     assert report["rules"] == [
-        {"id": "SLV-003", "tier": "reject", "note": "Dropoff is not after pickup", "hits": 1, "assigned": 1}
+        {"id": "SLV-003", "tier": "reject", "note": "Dropoff is not after pickup", "hits": 1, "assigned": 1, "flagged": None}
     ]
     assert set(report) == {"rows_in", "rows_out", "rejected", "quarantined", "rules"}
 
@@ -151,3 +151,41 @@ def test_bad_predicates_fail_before_writing_and_name_the_rule(con, source, tmp_p
 def test_flag_column_cannot_shadow_a_dataset_column(con, source, tmp_path):
     with pytest.raises(InvalidRule, match="already exists"):
         _run(con, source, tmp_path, [{"id": "f", "tier": "flag", "when": "true", "column": "fare"}])
+
+
+def test_flagged_counts_only_kept_rows(con, source, tmp_path):
+    # Row 7 hits SLV-008 but was quarantined first, so no kept row is flagged.
+    run, _ = _run(con, source, tmp_path, RULES)
+    flag = {r.id: r for r in run.rules}["SLV-008"]
+    assert (flag.hits, flag.assigned, flag.flagged) == (1, None, 0)
+    without_quarantine, _ = _run(con, source, tmp_path, [RULES[5]])
+    assert without_quarantine.rules[0].flagged == 1
+
+
+def test_count_rules_matches_apply_rules_and_writes_nothing(con, source, tmp_path):
+    counted = count_rules(con, parse_rules(RULES), source)
+    assert not list(tmp_path.glob("q_*.parquet"))
+    applied, _ = _run(con, source, tmp_path, RULES)
+    assert counted.report() == applied.report()
+
+
+def test_count_rules_reports_bad_predicates(con, source):
+    with pytest.raises(InvalidRule, match="rule bad: .*nope"):
+        count_rules(con, parse_rules([{"id": "bad", "tier": "monitor", "when": "nope > 1"}]), source)
+
+
+def test_variables_feed_predicates(con, source):
+    rules = parse_rules([{"id": "y", "tier": "flag", "when": "year(pickup) <> getvariable('period_year')"}])
+    assert count_rules(con, rules, source, variables={"period_year": 2024}).rules[0].hits == 1
+    assert count_rules(con, rules, source, variables={"period_year": 2023}).rules[0].hits == 6
+
+
+def test_unset_variable_never_hits(con, source):
+    rules = parse_rules([{"id": "y", "tier": "reject", "when": "year(pickup) <> getvariable('unset_var')"}])
+    assert count_rules(con, rules, source).rules[0].hits == 0
+
+
+@pytest.mark.parametrize("variables", [{"bad name": 1}, {"x": [1]}])
+def test_bad_variables_are_refused(con, source, variables):
+    with pytest.raises(InvalidRule):
+        count_rules(con, [], source, variables=variables)

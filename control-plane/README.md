@@ -73,7 +73,7 @@ Every route is registered in
 | GET / PATCH / DELETE | `/api/projects/{p}` | One project · rename/describe/`aiSettings` · archive (runs are kept). `{p}` is the id **or the slug** everywhere below |
 | GET | `/api/jobs/catalog` | Every job type the worker publishes: label, description, stage, `listed`, `requiresFeature`, `paramsSchema` |
 | POST | `/api/projects/{p}/jobs/{type}/run` | Queue a job. Body = JSON params, validated against the type's `paramsSchema` (`400` if they don't fit or the project lacks the job's `requiresFeature`, `404` for a type not in the catalog). Returns the run (`202`) |
-| GET | `/api/projects/{p}/jobs/runs?limit=&offset=` | Page of the project's runs, newest first, plus `hasMore` |
+| GET | `/api/projects/{p}/jobs/runs?limit=&offset=` | Page of the project's runs, newest first, plus `hasMore`. Each run carries the job's `metrics` (validate's per-rule report, train's scores, silver's monthly reports) |
 | DELETE | `/api/projects/{p}/jobs/runs` | Delete the project's finished runs (queued/running are kept) |
 | POST | `/api/projects/{p}/jobs/cancel-all` | Cancel the project's queued and running runs. Running jobs are stopped by the worker; the worker container keeps running |
 | POST | `/api/projects/{p}/jobs/{id}/control` | Live control: `{"action": "cancel"}` for any running job; `pause` \| `resume` \| `setSpeed` (`"speedMultiplier": 1\|2\|3\|5\|10`) for a running replay |
@@ -85,6 +85,8 @@ Every route is registered in
 | POST | `/api/projects/{p}/datasets/{name}/files` | Add another raw file (multipart); the dataset is re-ingested. `409` for a derived dataset (a job's output) |
 | GET | `/api/projects/{p}/datasets/{name}/preview?limit=20` | First rows, via the query engine |
 | GET | `/api/projects/{p}/datasets/{name}/profile` | Per-column stats (stored at ingest; `?refresh=1` recomputes) |
+| PUT | `/api/projects/{p}/datasets/{name}/rules` | Replace the quality rules, `{"rules": [{id, tier, when, note?, column?}]}`. Shape checked in `internal/datasets/rules.go`; for a ready dataset the query engine also checks each `when` binds. `400` names the bad rule |
+| POST | `/api/projects/{p}/datasets/{name}/rules/test` | Same body, saved or not: per-rule `hits` / `assigned` (removed) / `flagged` and the kept/rejected/quarantined totals over the whole dataset. Nothing is written; a bad rule is `200 {error}` |
 | POST | `/api/projects/{p}/query` | Read-only SQL over the project's datasets (DuckDB query engine; each dataset is a view named after it). Same body/response contract as `/api/query` |
 | GET | `/api/projects/{p}/query/catalog` | The project's ready datasets as `{schema:"main", table, columns}` |
 | POST | `/api/query` | Run a read-only `SELECT`/`WITH` (read-only transaction, row-capped). Not yet project-scoped |

@@ -1,0 +1,17 @@
+[
+  {"id": "SLV-001", "tier": "reject", "when": "tpep_pickup_datetime IS NULL", "note": "Missing pickup time"},
+  {"id": "SLV-002", "tier": "reject", "when": "tpep_dropoff_datetime IS NULL", "note": "Missing dropoff time"},
+  {"id": "SLV-003", "tier": "reject", "when": "tpep_dropoff_datetime <= tpep_pickup_datetime", "note": "Dropoff is not after pickup"},
+  {"id": "SLV-004", "tier": "reject", "when": "trip_distance < 0", "note": "Negative trip distance"},
+  {"id": "SLV-010", "tier": "quarantine", "when": "trip_distance > 100", "note": "Trip longer than 100 miles"},
+  {"id": "SLV-005", "tier": "quarantine", "when": "passenger_count <= 0", "note": "No passengers"},
+  {"id": "SLV-006", "tier": "quarantine", "when": "fare_amount < 0", "note": "Negative fare"},
+  {"id": "SLV-007", "tier": "quarantine", "when": "total_amount < 0", "note": "Negative total"},
+  {"id": "SLV-008", "tier": "flag", "when": "year(tpep_pickup_datetime) <> getvariable('period_year')", "column": "flag_pickup_year_mismatch", "note": "Pickup outside the month's year"},
+  {"id": "SLV-009", "tier": "flag", "when": "year(tpep_dropoff_datetime) < getvariable('period_year')", "column": "flag_dropoff_year_mismatch", "note": "Dropoff before the month's year"},
+  {"id": "MON-passenger_count", "tier": "monitor", "when": "passenger_count IS NULL", "note": "Missing passenger_count"},
+  {"id": "MON-RatecodeID", "tier": "monitor", "when": "RatecodeID IS NULL", "note": "Missing RatecodeID"},
+  {"id": "MON-store_and_fwd_flag", "tier": "monitor", "when": "store_and_fwd_flag IS NULL", "note": "Missing store_and_fwd_flag"},
+  {"id": "MON-congestion_surcharge", "tier": "monitor", "when": "congestion_surcharge IS NULL", "note": "Missing congestion_surcharge"},
+  {"id": "MON-Airport_fee", "tier": "monitor", "when": "Airport_fee IS NULL", "note": "Missing Airport_fee"}
+]

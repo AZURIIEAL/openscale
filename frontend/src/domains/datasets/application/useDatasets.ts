@@ -3,7 +3,7 @@ import { useCurrentProject } from '@/shared/project/useCurrentProject';
 import { runsQueryKey } from '@/domains/pipelines/application/useJobRuns';
 import { httpDatasetsGateway } from '../infrastructure/httpDatasetsGateway';
 import { hasPendingDataset } from '../domain/rules';
-import type { CreateFromUrlInput, UploadInput } from '../domain/entities';
+import type { CreateFromUrlInput, QualityRule, UploadInput } from '../domain/entities';
 
 const gateway = httpDatasetsGateway;
 
@@ -83,5 +83,22 @@ export function useDeleteDataset() {
   return useMutation({
     mutationFn: (name: string) => gateway.remove(slug, name),
     onSettled: invalidate,
+  });
+}
+
+export function useSaveRules() {
+  const { slug } = useCurrentProject();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ name, rules }: { name: string; rules: QualityRule[] }) => gateway.saveRules(slug, name, rules),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: datasetsQueryKey(slug) }),
+  });
+}
+
+/** A test is a request, not cached data: each press counts afresh. */
+export function useTestRules() {
+  const { slug } = useCurrentProject();
+  return useMutation({
+    mutationFn: ({ name, rules }: { name: string; rules: QualityRule[] }) => gateway.testRules(slug, name, rules),
   });
 }

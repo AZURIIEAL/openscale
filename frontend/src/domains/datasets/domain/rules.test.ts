@@ -10,6 +10,7 @@ const ds = (over: Partial<Dataset> = {}): Dataset => ({
   status: 'ready',
   source: { kind: 'upload', filename: 'orders.csv' },
   columns: [],
+  rules: [],
   createdAt: '',
   updatedAt: '',
   ...over,

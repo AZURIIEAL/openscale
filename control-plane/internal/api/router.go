@@ -119,6 +119,8 @@ func NewRouter(
 			r.Post("/datasets/{name}/files", datasetsHandler.AddFile)
 			r.Get("/datasets/{name}/preview", datasetsHandler.Preview)
 			r.Get("/datasets/{name}/profile", datasetsHandler.Profile)
+			r.Put("/datasets/{name}/rules", datasetsHandler.UpdateRules)
+			r.Post("/datasets/{name}/rules/test", datasetsHandler.TestRules)
 
 			// The project's own SQL editor backend: DuckDB over its datasets.
 			r.Post("/query", projectQueryHandler.Run)

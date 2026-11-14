@@ -13,7 +13,7 @@ session needs.
 | 1 Projects (`/p/{slug}`, `/api/projects/{p}`) | done | PR #1 |
 | 2 Datasets (upload / URL, fetch + ingest jobs) | done | PR #2 |
 | 3 Query engine (DuckDB service, project SQL) | done | PR #2 |
-| 4 Jobs, rules and pipelines as data; taxi → sample project | **in progress**: 4a, 4b done; 4c next | 4a: `phase-4a-job-registry`; 4b: `phase-4b-generic-jobs` |
+| 4 Jobs, rules and pipelines as data; taxi → sample project | **in progress**: 4a–4c done; 4d next | 4a: `phase-4a-job-registry`; 4b: `phase-4b-generic-jobs`; 4c: `phase-4c-rules-as-data` |
 | 5 Saved queries + dashboards; streaming passthrough | pending | — |
 | 6 MCP server with read-only tools | pending | — |
 | 7 Suggestions (heuristics, agent proposals, inbox) | pending | — |
@@ -27,8 +27,10 @@ Milestone 1 ("upload a CSV and query it") is complete on `main`.
 - The query engine uses the shared MinIO root credentials; give it a read-only
   user (Phase 9).
 - Image tags: only Kafka and Prometheus are pinned in `docker-compose.yml`.
-- Dataset rules can only be set in SQL until 4c adds the editor and API
-  (`UPDATE control_plane.datasets SET rules = '[...]'`).
+- The taxi Silver rules live in `worker/spark/silver/silver_rules.json` until 4e moves them onto
+  the sample project's Bronze dataset (the taxi Bronze isn't a `datasets` row yet).
+- Rules can read run variables via `getvariable('name')`; only the taxi Silver job sets any
+  (`period_year`, `period_month`). The editor's Test runs without them, so such rules show 0 hits there.
 - The taxi `train` job is now `fare_model` (migration 0008 renamed its run history);
   Dashboards' model-quality queries read `fare_model` until Phase 5 replaces them.
 - `replay` spends about 85 s in Spark loading all of Silver before its first send. A
@@ -74,16 +76,17 @@ cd control-plane && go vet ./... && go test ./...
 cd worker && pip install -e ../libs/openscale && python -m pytest
 cd libs/openscale && python -m pytest ; cd ../../query-engine && python -m pytest
 cd frontend && npm install && npm run lint && npx tsc -b && npm test
-cd worker && python scripts/golden_check.py 2024-07   # Silver rules vs stored quality reports
+docker compose run --rm --no-deps --entrypoint python -v ./etl-exposure:/etl-exposure:ro worker scripts/golden_check.py --all   # taxi rules vs original reports
 ```
 
 ## Phase 4 — where to start
 Slices, in order (each a PR): ~~**4a** job registry~~ (done: `@job` in `worker/registry.py`,
 `job_definitions` + `GET /api/jobs/catalog`, params validated in `internal/jobs/definitions.go`,
-`RunJobForm` generated from `paramsSchema`, one child process per run) → **4b** generic
+`RunJobForm` generated from `paramsSchema`, one child process per run) → ~~**4b**~~ generic
 `validate` / `sql_transform` / `train` job types (done: rule engine in `libs/openscale/rules.py`,
-derived datasets with lineage in `source`, `requires_feature` on jobs) → **4c** rules as JSON on `datasets.rules` with
-the golden check passing on the ten taxi rules → **4d** `pipelines` / `pipeline_runs` tables and a
+derived datasets with lineage in `source`, `requires_feature` on jobs) → ~~**4c**~~ rules as data (done:
+`PUT`/`POST .../datasets/{name}/rules[/test]`, the dataset page's Rules tab, the taxi Silver job runs
+`silver_rules.json` through the shared engine, golden check 13/13 months) → **4d** `pipelines` / `pipeline_runs` tables and a
 server-side orchestrator that reconciles from Postgres → **4e** `samples/nyc_taxi/project.json`,
 import/export, delete the taxi code and the `legacy_taxi` flag.
 

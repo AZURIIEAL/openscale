@@ -16,6 +16,11 @@ original taxi Silver rules (worker/spark/silver/rules.py):
                 flag_<id>) records whether the rule hit
     monitor     nothing changes; hits are only counted
 
+A predicate can read run variables with getvariable('name'): the caller
+passes them (the taxi Silver job sets period_year and period_month for the
+month it is cleaning). An unset variable is NULL, so a rule that needs one
+simply never hits when run without it.
+
 List order is priority: a row hitting several reject/quarantine rules is
 assigned to the first one only, so it lands in exactly one quarantine file
 (rejected rows get a file too, as the taxi job wrote them). A predicate that
@@ -29,7 +34,7 @@ against local Parquet files (tests/test_rules.py).
 
 import re
 from dataclasses import dataclass, field
-from typing import Callable
+from typing import Callable, Mapping
 
 import duckdb
 
@@ -69,6 +74,7 @@ class RuleStats:
     note: str
     hits: int  # rows the predicate matched
     assigned: int | None  # rows this rule removed (reject/quarantine only)
+    flagged: int | None = None  # kept rows marked true (flag only)
 
 
 @dataclass
@@ -86,7 +92,8 @@ class RuleRun:
             "rejected": self.rejected,
             "quarantined": self.quarantined,
             "rules": [
-                {"id": r.id, "tier": r.tier, "note": r.note, "hits": r.hits, "assigned": r.assigned} for r in self.rules
+                {"id": r.id, "tier": r.tier, "note": r.note, "hits": r.hits, "assigned": r.assigned, "flagged": r.flagged}
+                for r in self.rules
             ],
         }
 
@@ -130,9 +137,32 @@ def parse_rules(raw: list[dict] | None) -> list[Rule]:
     return rules
 
 
-def check_rules(con: duckdb.DuckDBPyConnection, rules: list[Rule], source: str, columns: list[str]) -> None:
+Variables = Mapping[str, int | float | str | bool]
+
+
+def set_variables(con: duckdb.DuckDBPyConnection, variables: Variables | None) -> None:
+    """Makes each variable readable from predicates as getvariable('name')."""
+    for name, value in (variables or {}).items():
+        if not _IDENT.match(name):
+            raise InvalidRule(f"variable name {name!r} is not a plain identifier")
+        if isinstance(value, bool):
+            literal = "true" if value else "false"
+        elif isinstance(value, (int, float)):
+            literal = repr(value)
+        elif isinstance(value, str):
+            literal = "'" + value.replace("'", "''") + "'"
+        else:
+            raise InvalidRule(f"variable {name!r} must be a number, string or boolean")
+        con.execute(f"SET VARIABLE {name} = {literal}")
+
+
+def check_rules(
+    con: duckdb.DuckDBPyConnection, rules: list[Rule], source: str, columns: list[str] | None = None
+) -> None:
     """Binds every predicate against the source without reading data, so a
     typo fails the run before anything is written, naming the rule."""
+    if columns is None:
+        columns = _source_columns(con, source)
     for rule in rules:
         if rule.tier == "flag" and rule.flag_column in columns:
             raise InvalidRule(f"rule {rule.id}: flag column {rule.flag_column!r} already exists in the dataset")
@@ -141,7 +171,13 @@ def check_rules(con: duckdb.DuckDBPyConnection, rules: list[Rule], source: str, 
             check_single_select(con, sql)
             con.execute(f"SELECT * FROM ({sql}) LIMIT 0").fetchall()
         except (RejectedSQL, duckdb.Error) as exc:
-            raise InvalidRule(f"rule {rule.id}: {exc}") from exc
+            raise InvalidRule(f"rule {rule.id}: {_first_part(exc)}") from exc
+
+
+def _first_part(exc: Exception) -> str:
+    """DuckDB errors end with a "LINE 1: <sql>" excerpt of the wrapper query
+    the predicate was spliced into; the user only wrote the predicate."""
+    return str(exc).split("\n\nLINE ", 1)[0].strip()
 
 
 def tagged_sql(rules: list[Rule], source: str) -> str:
@@ -153,35 +189,71 @@ def tagged_sql(rules: list[Rule], source: str) -> str:
     return f"SELECT *, {assigned} AS {_ASSIGNED} FROM (SELECT *{hits} FROM {source})"
 
 
+def _source_columns(con: duckdb.DuckDBPyConnection, source: str) -> list[str]:
+    return [row[0] for row in con.execute(f"DESCRIBE SELECT * FROM {source}").fetchall()]
+
+
+def _tag_and_count(con: duckdb.DuckDBPyConnection, rules: list[Rule], source: str) -> RuleRun:
+    """Creates the __os_tagged view and counts every rule in one scan."""
+    con.execute(f"CREATE OR REPLACE TEMP VIEW __os_tagged AS {tagged_sql(rules, source)}")
+    count_cols = ["COUNT(*)", f"COUNT(*) FILTER (WHERE {_ASSIGNED} IS NULL)"]
+    for i in range(len(rules)):
+        hit = _HIT.format(i)
+        count_cols.append(f"COUNT(*) FILTER (WHERE {hit})")
+        count_cols.append(f"COUNT(*) FILTER (WHERE {_ASSIGNED} = {i})")
+        count_cols.append(f"COUNT(*) FILTER (WHERE {hit} AND {_ASSIGNED} IS NULL)")
+    counts = con.execute(f"SELECT {', '.join(count_cols)} FROM __os_tagged").fetchone()
+
+    stats: list[RuleStats] = []
+    for i, r in enumerate(rules):
+        hits, assigned, kept_hits = (int(c) for c in counts[2 + 3 * i : 5 + 3 * i])
+        stats.append(
+            RuleStats(
+                r.id,
+                r.tier,
+                r.note,
+                hits,
+                assigned if r.tier in EXCLUDING_TIERS else None,
+                kept_hits if r.tier == "flag" else None,
+            )
+        )
+    rejected = sum(s.assigned or 0 for s in stats if s.tier == "reject")
+    quarantined = sum(s.assigned or 0 for s in stats if s.tier == "quarantine")
+    return RuleRun(
+        rows_in=int(counts[0]), rows_out=int(counts[1]), rejected=rejected, quarantined=quarantined, rules=stats
+    )
+
+
+def count_rules(
+    con: duckdb.DuckDBPyConnection, rules: list[Rule], source: str, *, variables: Variables | None = None
+) -> RuleRun:
+    """What apply_rules would do, without writing anything: the rule
+    editor's Test button. One scan of the source."""
+    set_variables(con, variables)
+    check_rules(con, rules, source, _source_columns(con, source))
+    return _tag_and_count(con, rules, source)
+
+
 def apply_rules(
     con: duckdb.DuckDBPyConnection,
     rules: list[Rule],
     source: str,
     clean_path: str,
     quarantine_path: Callable[[Rule], str],
+    *,
+    variables: Variables | None = None,
 ) -> RuleRun:
     """Runs the rules over `source` (a table, view or read_parquet(...)) and
     writes the kept rows, with flag columns, to clean_path and each
     reject/quarantine rule's rows to quarantine_path(rule). Only rules that
     removed rows get a file. The source is scanned once to count and once
     per file written; nothing is held in memory."""
-    columns = [row[0] for row in con.execute(f"DESCRIBE SELECT * FROM {source}").fetchall()]
+    set_variables(con, variables)
+    columns = _source_columns(con, source)
     check_rules(con, rules, source, columns)
-
-    con.execute(f"CREATE OR REPLACE TEMP VIEW __os_tagged AS {tagged_sql(rules, source)}")
+    run = _tag_and_count(con, rules, source)
+    stats = run.rules
     original = ", ".join(quote_ident(c) for c in columns)
-
-    count_cols = ["COUNT(*)", f"COUNT(*) FILTER (WHERE {_ASSIGNED} IS NULL)"]
-    for i, r in enumerate(rules):
-        count_cols.append(f"COUNT(*) FILTER (WHERE {_HIT.format(i)})")
-        count_cols.append(f"COUNT(*) FILTER (WHERE {_ASSIGNED} = {i})")
-    counts = con.execute(f"SELECT {', '.join(count_cols)} FROM __os_tagged").fetchone()
-    rows_in, rows_out = int(counts[0]), int(counts[1])
-
-    stats: list[RuleStats] = []
-    for i, r in enumerate(rules):
-        hits, assigned = int(counts[2 + 2 * i]), int(counts[3 + 2 * i])
-        stats.append(RuleStats(r.id, r.tier, r.note, hits, assigned if r.tier in EXCLUDING_TIERS else None))
 
     flags = "".join(
         f", {_HIT.format(i)} AS {quote_ident(r.flag_column)}" for i, r in enumerate(rules) if r.tier == "flag"
@@ -196,7 +268,4 @@ def apply_rules(
                 f"COPY (SELECT {original} FROM __os_tagged WHERE {_ASSIGNED} = {i}) "
                 f"TO '{quarantine_path(r)}' (FORMAT PARQUET, COMPRESSION ZSTD)"
             )
-
-    rejected = sum(s.assigned or 0 for s in stats if s.tier == "reject")
-    quarantined = sum(s.assigned or 0 for s in stats if s.tier == "quarantine")
-    return RuleRun(rows_in=rows_in, rows_out=rows_out, rejected=rejected, quarantined=quarantined, rules=stats)
+    return run

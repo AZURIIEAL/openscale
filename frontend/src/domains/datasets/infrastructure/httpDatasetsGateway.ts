@@ -1,8 +1,8 @@
-import { API_BASE_URL, apiDelete, apiGet, apiPost } from '@/shared/api/httpClient';
+import { API_BASE_URL, apiDelete, apiGet, apiPost, apiPut } from '@/shared/api/httpClient';
 import { projectApiPath } from '@/shared/project/rules';
 import { mapApiJobRun, type ApiJobRun } from '@/domains/pipelines/infrastructure/apiMapping';
 import type { CreateDatasetResponse, DatasetsGateway } from '../application/DatasetsGateway';
-import type { Dataset, DatasetProfile, UploadInput } from '../domain/entities';
+import type { Dataset, DatasetProfile, RulesTestResult, UploadInput } from '../domain/entities';
 import type { QueryError, QueryResult } from '@/domains/sql-editor/domain/entities';
 
 interface ApiCreateResponse {
@@ -56,4 +56,6 @@ export const httpDatasetsGateway: DatasetsGateway = {
   remove: (p, name) => apiDelete(projectApiPath(p, `datasets/${encodeURIComponent(name)}`)),
   preview: (p, name, limit = 20) => apiGet<QueryResult | QueryError>(projectApiPath(p, `datasets/${encodeURIComponent(name)}/preview?limit=${limit}`)),
   profile: (p, name) => apiGet<DatasetProfile>(projectApiPath(p, `datasets/${encodeURIComponent(name)}/profile`)),
+  saveRules: (p, name, rules) => apiPut<Dataset>(projectApiPath(p, `datasets/${encodeURIComponent(name)}/rules`), { rules }),
+  testRules: (p, name, rules) => apiPost<RulesTestResult>(projectApiPath(p, `datasets/${encodeURIComponent(name)}/rules/test`), { rules }),
 };

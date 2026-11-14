@@ -1,4 +1,4 @@
-import { useRef, useState, type ReactNode } from 'react';
+import { useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Badge } from '@/shared/design-system/Badge';
 import { Panel } from '@/shared/design-system/Panel';
@@ -13,16 +13,18 @@ import { formatBytes } from '@/domains/data-catalog/domain/rules';
 import { useAddDatasetFile, useDatasetPreview, useDatasetProfile, useDeleteDataset } from '../application/useDatasets';
 import { formatNullShare, formatRows, formatStat, isSupportedFilename, profileWarnings, sourceLabel, statusLabel, statusTone } from '../domain/rules';
 import type { Dataset } from '../domain/entities';
+import { ActionButton } from './ActionButton';
+import { RulesEditor } from './RulesEditor';
 
-type Tab = 'columns' | 'preview' | 'profile';
+type Tab = 'columns' | 'preview' | 'profile' | 'rules';
 
 interface DatasetDetailProps {
   dataset: Dataset;
   onClose: () => void;
 }
 
-/** One dataset: schema, a 20-row preview, the column profile, plus
- * add-file, open-in-SQL and delete. */
+/** One dataset: schema, a 20-row preview, the column profile, its quality
+ * rules, plus add-file, open-in-SQL and delete. */
 export function DatasetDetail({ dataset, onClose }: DatasetDetailProps) {
   const [tab, setTab] = useState<Tab>('columns');
   const navigate = useNavigate();
@@ -99,27 +101,16 @@ export function DatasetDetail({ dataset, onClose }: DatasetDetailProps) {
           { value: 'columns', label: 'Columns' },
           { value: 'preview', label: 'Preview' },
           { value: 'profile', label: 'Profile' },
+          { value: 'rules', label: dataset.rules.length ? `Rules (${dataset.rules.length})` : 'Rules' },
         ]}
       />
 
       {tab === 'columns' && <ColumnsTab dataset={dataset} />}
       {tab === 'preview' && (ready ? <PreviewTab name={dataset.name} /> : <NotReady />)}
       {tab === 'profile' && (ready ? <ProfileTab name={dataset.name} /> : <NotReady />)}
+      {/* Keyed so switching datasets starts a fresh draft. */}
+      {tab === 'rules' && <RulesEditor key={dataset.id} dataset={dataset} />}
     </Panel>
-  );
-}
-
-function ActionButton({ children, onClick, disabled, danger }: { children: ReactNode; onClick: () => void; disabled?: boolean; danger?: boolean }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
-      className="os-well rounded-lg px-3 py-1.5 text-[12.5px]"
-      style={{ border: 'none', cursor: disabled ? 'default' : 'pointer', color: danger ? 'var(--danger)' : 'var(--text-body)', opacity: disabled ? 0.6 : 1 }}
-    >
-      {children}
-    </button>
   );
 }
 

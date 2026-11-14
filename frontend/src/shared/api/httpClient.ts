@@ -37,7 +37,7 @@ export async function apiPut<T>(path: string, body: unknown): Promise<T> {
     body: JSON.stringify(body),
   });
   if (!res.ok) {
-    throw new Error(`PUT ${path} failed: ${res.status} ${res.statusText}`);
+    throw new Error(`PUT ${path} failed: ${res.status} ${await readErrorBody(res)}`);
   }
   return res.json() as Promise<T>;
 }

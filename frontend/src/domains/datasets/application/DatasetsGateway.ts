@@ -1,5 +1,5 @@
 import type { QueryError, QueryResult } from '@/domains/sql-editor/domain/entities';
-import type { CreateFromUrlInput, Dataset, DatasetProfile, UploadInput } from '../domain/entities';
+import type { CreateFromUrlInput, Dataset, DatasetProfile, QualityRule, RulesTestResult, UploadInput } from '../domain/entities';
 import type { JobRun } from '@/domains/pipelines/domain/entities';
 
 export interface CreateDatasetResponse {
@@ -17,4 +17,8 @@ export interface DatasetsGateway {
   remove(projectSlug: string, name: string): Promise<void>;
   preview(projectSlug: string, name: string, limit?: number): Promise<QueryResult | QueryError>;
   profile(projectSlug: string, name: string): Promise<DatasetProfile>;
+  /** Replaces the dataset's rules; the server refuses a rule that doesn't run. */
+  saveRules(projectSlug: string, name: string, rules: QualityRule[]): Promise<Dataset>;
+  /** Counts what the rules would do over the whole dataset; writes nothing. */
+  testRules(projectSlug: string, name: string, rules: QualityRule[]): Promise<RulesTestResult>;
 }
