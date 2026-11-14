@@ -18,6 +18,18 @@ export default defineConfig({
     // Harmless for host-machine dev too (still reachable at localhost).
     host: true,
     port: 5173,
+    // The browser calls /api on the page's own origin and this forwards it
+    // (WebSockets too) to the control-plane, so the app works from any
+    // address -- including another laptop on the LAN, whose "localhost"
+    // is not this machine. No changeOrigin: the Host header stays the
+    // page's host, which is what the control-plane's WebSocket origin
+    // check compares the Origin against.
+    proxy: {
+      '/api': {
+        target: process.env.API_PROXY_TARGET ?? 'http://localhost:8080',
+        ws: true,
+      },
+    },
     watch: {
       // The frontend container's source is a bind mount from the Windows
       // host (docker-compose.yml's `./frontend:/app`) -- native filesystem

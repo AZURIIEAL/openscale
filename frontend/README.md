@@ -37,7 +37,8 @@ frontend itself runs in a container.
 
 | Var | Default | Used by |
 |---|---|---|
-| `VITE_API_BASE_URL` | `http://localhost:8080` | every HTTP gateway and WebSocket ([`src/shared/api/httpClient.ts`](src/shared/api/httpClient.ts)) |
+| `VITE_API_BASE_URL` | empty (same origin) | every HTTP gateway and WebSocket ([`src/shared/api/httpClient.ts`](src/shared/api/httpClient.ts)); leave empty to go through the dev server's `/api` proxy |
+| `API_PROXY_TARGET` | `http://localhost:8080` | where the dev server forwards `/api` (not inlined; compose sets `http://control-plane:8080`) |
 | `VITE_MLFLOW_BASE_URL` | `http://localhost:5000` | ML Workbench iframe |
 | `VITE_JUPYTER_BASE_URL` | `http://localhost:8888` | Notebooks iframe |
 | `VITE_JUPYTER_TOKEN` | `openscale-dev` | Notebooks iframe |

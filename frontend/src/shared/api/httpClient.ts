@@ -3,7 +3,12 @@
  * control-plane base URL and JSON error handling so individual gateways
  * (HttpSystemHealthGateway, and future ones) stay one-liners.
  */
-export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8080';
+// Empty by default: requests go to the page's own origin, and the Vite dev
+// server forwards /api to the control-plane (vite.config.ts). That keeps the
+// app working from any address it's opened at -- localhost or another
+// machine on the LAN -- without CORS. Set it only to call a control-plane
+// on a different origin directly.
+export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? '';
 
 export async function apiGet<T>(path: string): Promise<T> {
   const res = await fetch(`${API_BASE_URL}${path}`);
@@ -58,7 +63,8 @@ export async function apiDelete(path: string): Promise<void> {
 
 /** Builds a ws://.../wss://... URL from the same base the HTTP helpers use. */
 export function wsUrl(path: string): string {
-  return `${API_BASE_URL.replace(/^http/, 'ws')}${path}`;
+  const base = API_BASE_URL || window.location.origin;
+  return `${base.replace(/^http/, 'ws')}${path}`;
 }
 
 /** The control-plane writes validation errors as a plain-text body (via

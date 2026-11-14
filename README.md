@@ -278,7 +278,14 @@ flag that `docker compose` can't pass.)
 
 **A port is already in use.** Change the left side of that service's
 `ports:` mapping in `docker-compose.yml`. If you move the control-plane or
-frontend ports, update `VITE_API_BASE_URL` and `FRONTEND_ORIGIN` to match.
+frontend ports, update the frontend's `API_PROXY_TARGET` to match.
+
+**Opening OpenScale from another machine.** Browse to
+`http://<this machine's IP>:5173`. API calls go through the frontend's
+`/api` proxy, so they work from anywhere. The MLflow, Jupyter and Grafana
+links still point at `localhost`; set `VITE_MLFLOW_BASE_URL` and
+`VITE_JUPYTER_BASE_URL` on the frontend service to this machine's IP to
+use them remotely.
 
 **A Spark job dies or the worker restarts mid-job.** Spark's driver gets
 `SPARK_DRIVER_MEMORY=6g` by default (set on the `worker` service). Lower it
