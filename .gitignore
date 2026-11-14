@@ -1,0 +1,6 @@
+# Python build/test output, for every package in the repo (worker/,
+# query-engine/, libs/openscale/, ...).
+__pycache__/
+*.py[cod]
+.pytest_cache/
+*.egg-info/
