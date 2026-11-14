@@ -143,6 +143,8 @@ to stop one mid-run.
 | `KAFKA_BROKER` | `localhost:29092` | `kafka:9092` |
 | `MINIO_ENDPOINT` | `http://localhost:9000` | `http://minio:9000` |
 | `MINIO_ACCESS_KEY` / `MINIO_SECRET_KEY` | `minioadmin` / `minioadmin` | |
+| `QUERY_ENGINE_URL` | `http://localhost:8090` | `http://query-engine:8090` (no host port, so a host-run control-plane can't reach it) |
+| `MAX_UPLOAD_BYTES` | `2147483648` (2 GiB) | |
 
 ## Metrics
 
