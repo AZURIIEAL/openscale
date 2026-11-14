@@ -1,7 +1,9 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import { Panel } from '@/shared/design-system/Panel';
 import { useRunQuery } from '../application/useRunQuery';
+import { useQueryTarget } from '../application/useQueryTarget';
+import { useCatalog } from '../application/useCatalog';
 import { useQueryHistory } from '../application/useQueryHistory';
 import { isQueryError } from '../domain/rules';
 import { CatalogPanel } from './CatalogPanel';
@@ -9,16 +11,16 @@ import { QueryHistoryPanel } from './QueryHistoryPanel';
 import { QueryEditor } from './QueryEditor';
 import { ResultsTable } from './ResultsTable';
 
-const DEFAULT_SQL =
+const LEGACY_DEFAULT_SQL =
   'select job_type, status, submitted_at, rows_processed\nfrom control_plane.job_runs\norder by submitted_at desc\nlimit 20;';
 
 /**
- * Real (this pass's scope): read-only SELECT/WITH queries against the
- * control-plane's Postgres database only -- job_runs plus whatever gold
- * tables and zone_hour_features the worker has written. Querying
- * Bronze/Silver Parquet on the lake directly (ideas/tech-stack.md's DuckDB
- * plan) is a separate, larger effort and explicitly not built yet -- the
- * copy below says so rather than implying it works.
+ * Read-only SELECT/WITH queries. In the taxi sample project they run
+ * against the control-plane's Postgres (its Gold tables live there); in
+ * every other project they run through the DuckDB query engine over the
+ * project's own datasets, each exposed as a view named after it. The
+ * default query is picked accordingly: a Postgres example, or `select *`
+ * from the project's first dataset.
  */
 /** A search result for a specific table (see shared/search) lands here
  * with a ready-to-run SELECT already filled in, via react-router
@@ -29,7 +31,23 @@ interface SqlEditorNavState {
 
 export function SqlEditorScreen() {
   const navState = useLocation().state as SqlEditorNavState | null;
-  const [sql, setSql] = useState(navState?.prefillSql ?? DEFAULT_SQL);
+  const target = useQueryTarget();
+  const catalog = useCatalog();
+  const firstTable = catalog.data?.[0];
+  const defaultSql = target.legacy
+    ? LEGACY_DEFAULT_SQL
+    : firstTable
+      ? `select *\nfrom ${firstTable.table}\nlimit 20;`
+      : '-- Upload a dataset in the Data Catalog, then query it here by name.\nselect 1;';
+  const [sql, setSql] = useState(navState?.prefillSql ?? defaultSql);
+  // The dataset list arrives after first render; seed the default query
+  // then, but only while the editor still holds the placeholder (never
+  // over something the user typed).
+  useEffect(() => {
+    if (!target.legacy && firstTable) {
+      setSql((current) => (current.startsWith('-- Upload a dataset') ? defaultSql : current));
+    }
+  }, [target.legacy, firstTable, defaultSql]);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const runQuery = useRunQuery();
   const { entries, addEntry, clear } = useQueryHistory();

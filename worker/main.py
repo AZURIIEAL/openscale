@@ -12,7 +12,7 @@ from datetime import datetime, timezone
 
 import db
 import redis_client
-from jobs import features, gold, ingest, replay, reset, silver, train
+from jobs import dataset_fetch, dataset_ingest, features, gold, ingest, replay, reset, silver, train
 
 JOB_TABLE = {
     "ingest": ingest.run,
@@ -22,6 +22,8 @@ JOB_TABLE = {
     "train": train.run,
     "reset": reset.run,
     "replay": replay.run,
+    "dataset_fetch": dataset_fetch.run,
+    "dataset_ingest": dataset_ingest.run,
 }
 
 STREAM = "openscale:jobs:requests"

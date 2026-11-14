@@ -112,3 +112,15 @@ curl -X POST localhost:8080/api/jobs/silver/run -d '{}'
   Silicon, Ampere) the path is `java-21-openjdk-arm64`.
 - Only one worker container runs. The consumer group would let you scale
   out, but cancel-all assumes a single container.
+
+## Dataset jobs
+
+`dataset_fetch` and `dataset_ingest` are queued by the control-plane's
+datasets API, not from the Pipelines form. Fetch streams a URL into the
+dataset's `raw/` folder (refusing private addresses, see
+`libs/openscale/openscale/url_check.py`) and then runs ingest; ingest reads
+every raw file with DuckDB (`UNION ALL BY NAME` across files), writes one
+Parquet part under `data/`, and stores the schema, row count, size and
+column profile on the `control_plane.datasets` row. The pure parts live in
+`datasets/` and `libs/openscale`; `jobs/dataset_*.py` are the status
+wrappers.

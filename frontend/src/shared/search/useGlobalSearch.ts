@@ -8,6 +8,7 @@ import { JOB_CATALOG } from '@/domains/pipelines/domain/entities';
 import { stateLabel, formatRunTime } from '@/domains/pipelines/domain/rules';
 import { httpJobsGateway } from '@/domains/pipelines/infrastructure/httpJobsGateway';
 import { httpQueryGateway } from '@/domains/sql-editor/infrastructure/httpQueryGateway';
+import { useQueryTarget } from '@/domains/sql-editor/application/useQueryTarget';
 import { quotedTableRef } from '@/domains/data-catalog/domain/rules';
 import { matchesQuery, MAX_RESULTS_PER_CATEGORY } from './rules';
 import type { SearchResults } from './entities';
@@ -28,11 +29,12 @@ export function useGlobalSearch(query: string, enabled: boolean): { results: Sea
   const active = enabled && trimmed.length > 0;
   const { slug } = useCurrentProject();
   const { data: projects } = useProjectsList();
+  const target = useQueryTarget();
 
   const catalogQuery = useQuery({
-    queryKey: ['search', 'catalog'],
-    queryFn: () => httpQueryGateway.fetchCatalog(),
-    enabled,
+    queryKey: ['search', slug, 'catalog', target.legacy],
+    queryFn: () => httpQueryGateway.fetchCatalog(target),
+    enabled: enabled && slug !== '',
     staleTime: 10 * 60 * 1000,
   });
 

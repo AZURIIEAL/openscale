@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Panel } from '@/shared/design-system/Panel';
 import { Spinner } from '@/shared/design-system/Spinner';
 import { useCatalog } from '../application/useCatalog';
+import { useQueryTarget } from '../application/useQueryTarget';
 import { qualifiedTableName } from '../domain/rules';
 import type { CatalogTable } from '../domain/entities';
 
@@ -54,6 +55,7 @@ function TableRow({ table, onInsert }: { table: CatalogTable; onInsert: (text: s
  * inserts it into the editor at the cursor. */
 export function CatalogPanel({ onInsertTable }: { onInsertTable: (text: string) => void }) {
   const { data, isLoading, isError } = useCatalog();
+  const { legacy } = useQueryTarget();
 
   return (
     <Panel className="flex flex-col gap-3 p-4">
@@ -62,7 +64,9 @@ export function CatalogPanel({ onInsertTable }: { onInsertTable: (text: string) 
           Schema
         </h3>
         <p className="m-0 mt-1.5 text-[12px] leading-snug" style={{ color: 'var(--text-muted)' }}>
-          Postgres only, for now -- Bronze/Silver Parquet on the lake isn't queryable from here yet.
+          {legacy
+            ? 'This sample project queries Postgres: Gold aggregates, features and job history.'
+            : 'Your datasets, each a DuckDB view named after it. Uploads appear here once ingested.'}
         </p>
       </div>
       {isLoading ? (

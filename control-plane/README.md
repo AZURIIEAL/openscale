@@ -46,7 +46,9 @@ internal/
   metrics/           The only Prometheus client user: /metrics, HTTP middleware, job-run collector
   redis/             The only go-redis user: job request stream, live event pub/sub, control hashes
   streaming/         The only kafka-go user: topic listing, trip consumer, windowed aggregates, WS hub
+  datasets/          Dataset domain: name/URL rules, lake layout (pure, tested)
   projects/          Project domain: type, slug rules, create/update validation (pure, tested)
+  queryengine/       HTTP client for the DuckDB query service (query-engine/)
   sqlcheck/          Single-SELECT check for the SQL editor (pure, tested)
   ws/                WebSocket hub relaying job events to /api/ws/jobs/{id} subscribers
 ```
@@ -77,6 +79,13 @@ Every route is registered in
 | GET | `/api/ws/jobs/{id}` | WebSocket: live `status`/`log` events for one run (run ids are global, so this stays unscoped) |
 | GET | `/api/projects/{p}/dashboards/overview` | All Dashboards-screen chart data |
 | GET | `/api/projects/{p}/home/stats` | Home stat cards |
+| GET / POST | `/api/projects/{p}/datasets` | List datasets · create one: `multipart/form-data` (`name`?, `layer`?, `file`) streams the file to the lake and queues `dataset_ingest`; JSON `{"name"?, "layer"?, "url"}` queues `dataset_fetch` (download + ingest). Returns `202 {dataset, run}` |
+| GET / DELETE | `/api/projects/{p}/datasets/{name}` | One dataset (schema, counts, status, error) · delete it and its lake files |
+| POST | `/api/projects/{p}/datasets/{name}/files` | Add another raw file (multipart); the dataset is re-ingested |
+| GET | `/api/projects/{p}/datasets/{name}/preview?limit=20` | First rows, via the query engine |
+| GET | `/api/projects/{p}/datasets/{name}/profile` | Per-column stats (stored at ingest; `?refresh=1` recomputes) |
+| POST | `/api/projects/{p}/query` | Read-only SQL over the project's datasets (DuckDB query engine; each dataset is a view named after it). Same body/response contract as `/api/query` |
+| GET | `/api/projects/{p}/query/catalog` | The project's ready datasets as `{schema:"main", table, columns}` |
 | POST | `/api/query` | Run a read-only `SELECT`/`WITH` (read-only transaction, row-capped). Not yet project-scoped |
 | GET | `/api/query/catalog` | Queryable schemas, tables and columns |
 | GET | `/api/catalog/lake` | MinIO lake contents by layer |
@@ -175,8 +184,8 @@ hand-written against pgx (see the note at the top of `internal/db/db.go`).
 go test ./...
 ```
 
-The dependency-free packages (`internal/health`, `internal/jobs`,
-`internal/projects`, `internal/sqlcheck`) carry table-driven unit tests and
+The dependency-free packages (`internal/datasets`, `internal/health`,
+`internal/jobs`, `internal/projects`, `internal/sqlcheck`) carry table-driven unit tests and
 run in CI on every push (`.github/workflows/ci.yml`). Handlers and `internal/db`
 are exercised against the running stack; a Postgres-backed test harness is
 on the list for Phase 2 of the implementation plan.

@@ -36,10 +36,22 @@ jobs:
           python-version: "3.13"
           cache: pip
           cache-dependency-path: worker/requirements.txt
-      # The unit tests import only pandas-level modules; installing the
-      # full Spark/MLflow stack would add minutes for nothing.
-      - run: pip install pandas==2.3.3 pyarrow requests pytest
+      # The unit tests import only pandas/duckdb-level modules; installing
+      # the full Spark/MLflow stack would add minutes for nothing.
+      - run: pip install pandas==2.3.3 pyarrow requests pytest duckdb -e ../libs/openscale
       - run: python -m pytest
+
+  python-libs:
+    name: libs/openscale + query-engine (Python)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: pip install pytest -e libs/openscale -r query-engine/requirements.txt
+      - run: python -m pytest libs/openscale
+      - run: python -m pytest query-engine
 
   frontend:
     name: frontend (TypeScript)

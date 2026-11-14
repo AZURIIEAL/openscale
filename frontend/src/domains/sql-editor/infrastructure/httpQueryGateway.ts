@@ -1,16 +1,21 @@
 import { apiGet, apiPost } from '@/shared/api/httpClient';
-import type { QueryGateway } from '../application/QueryGateway';
+import { projectApiPath } from '@/shared/project/rules';
+import type { QueryGateway, QueryTarget } from '../application/QueryGateway';
 import type { CatalogTable, QueryError, QueryResult } from '../domain/entities';
 
+function queryPath(t: QueryTarget, suffix = ''): string {
+  return t.legacy ? `/api/query${suffix}` : projectApiPath(t.projectSlug, `query${suffix}`);
+}
+
 export const httpQueryGateway: QueryGateway = {
-  async runQuery(sql) {
-    // Deliberately not apiPost<QueryResult>: the control-plane always
-    // responds 200 here, with the outcome (success or {"error": "..."})
-    // distinguished in the body, not the status code -- see
-    // control-plane/internal/api/query_handler.go's Run.
-    return apiPost<QueryResult | QueryError>('/api/query', { sql });
+  async runQuery(target, sql) {
+    // Deliberately not apiPost<QueryResult>: both backends always respond
+    // 200 here, with the outcome (success or {"error": "..."}) in the
+    // body, not the status code -- see query_handler.go and
+    // project_query_handler.go's Run.
+    return apiPost<QueryResult | QueryError>(queryPath(target), { sql });
   },
-  async fetchCatalog() {
-    return apiGet<CatalogTable[]>('/api/query/catalog');
+  async fetchCatalog(target) {
+    return apiGet<CatalogTable[]>(queryPath(target, '/catalog'));
   },
 };
