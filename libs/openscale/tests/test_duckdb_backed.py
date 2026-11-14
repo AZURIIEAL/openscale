@@ -9,7 +9,7 @@ import pytest
 duckdb = pytest.importorskip("duckdb")
 
 from openscale.duck import DatasetView, attach_views, lockdown, quote_ident  # noqa: E402
-from openscale.ingest import convert_to_parquet, list_raw_files, profile  # noqa: E402
+from openscale.ingest import convert_to_parquet, files_size_bytes, list_raw_files, profile  # noqa: E402
 from openscale.sqlguard import RejectedSQL, check_single_select  # noqa: E402
 
 
@@ -47,6 +47,14 @@ def test_convert_unions_by_name_and_reports_schema(con, raw_dir, tmp_path):
     # the csv rows have no "extra": it reads as NULL
     nulls = con.execute(f"SELECT COUNT(*) FROM read_parquet('{out}') WHERE extra IS NULL").fetchone()[0]
     assert nulls == 3
+
+
+def test_files_size_bytes_sums_matching_files(con, raw_dir, tmp_path):
+    files = list_raw_files(con, str(raw_dir / "*"))
+    out = tmp_path / "part-00000.parquet"
+    convert_to_parquet(con, files, str(out))
+    assert files_size_bytes(con, str(tmp_path / "*.parquet")) == out.stat().st_size
+    assert files_size_bytes(con, str(tmp_path / "*.nothing")) == 0
 
 
 def test_profile_shape(con, raw_dir, tmp_path):

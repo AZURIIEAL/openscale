@@ -8,7 +8,7 @@ from dataclasses import dataclass
 import duckdb
 
 from openscale import paths
-from openscale.ingest import IngestResult, convert_to_parquet, list_raw_files, profile
+from openscale.ingest import IngestResult, convert_to_parquet, files_size_bytes, list_raw_files, profile
 
 
 @dataclass
@@ -39,11 +39,7 @@ def ingest_dataset(con: duckdb.DuckDBPyConnection, project_id: str, dataset_id: 
     result = convert_to_parquet(con, files, part)
     log(f"{result.row_count} rows, {len(result.columns)} columns")
 
-    size_bytes = int(con.execute("SELECT COALESCE(SUM(size), 0) FROM glob(?)", [paths.data_glob(project_id, dataset_id)]).fetchone()[0] or 0)
-    if size_bytes == 0:
-        # glob() does not expose size on every DuckDB version; fall back to
-        # the Parquet metadata, which does.
-        size_bytes = int(con.execute("SELECT COALESCE(SUM(total_compressed_size), 0) FROM parquet_metadata(?)", [part]).fetchone()[0] or 0)
+    size_bytes = files_size_bytes(con, paths.data_glob(project_id, dataset_id))
 
     log("profiling columns")
     prof = profile(con, f"read_parquet('{part}')")

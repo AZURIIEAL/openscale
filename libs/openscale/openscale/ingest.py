@@ -21,6 +21,13 @@ def list_raw_files(con: duckdb.DuckDBPyConnection, raw_glob: str) -> list[str]:
     return [r[0] for r in rows if is_supported(r[0])]
 
 
+def files_size_bytes(con: duckdb.DuckDBPyConnection, pattern: str) -> int:
+    """Total on-disk bytes of every file matching pattern (0 if none).
+    glob() only returns file names, so this uses read_blob(), which only
+    stats the files when `content` isn't selected."""
+    return int(con.execute("SELECT COALESCE(SUM(size), 0) FROM read_blob(?)", [pattern]).fetchone()[0])
+
+
 def convert_to_parquet(con: duckdb.DuckDBPyConnection, raw_files: list[str], data_part: str) -> IngestResult:
     """Reads every raw file (schemas unioned by name), writes one Parquet
     file, and returns the inferred columns and row count. DuckDB streams
