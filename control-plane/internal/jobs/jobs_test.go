@@ -38,19 +38,6 @@ func TestExpandMonthRangeLength(t *testing.T) {
 	}
 }
 
-func TestIsKnownJobType(t *testing.T) {
-	for _, d := range Catalog {
-		if !IsKnownJobType(d.Type) {
-			t.Errorf("catalog entry %q not recognised", d.Type)
-		}
-	}
-	for _, unknown := range []string{"", "INGEST", "deploy", "gold "} {
-		if IsKnownJobType(unknown) {
-			t.Errorf("%q should not be a known job type", unknown)
-		}
-	}
-}
-
 func TestDisplayStatus(t *testing.T) {
 	cases := map[Status]health.Status{
 		StatusSucceeded: health.StatusGood,

@@ -1,6 +1,15 @@
 import { describe, expect, it } from 'vitest';
-import { deriveRunStatus, formatRunDuration, formatRunRows, stateLabel } from './rules';
-import type { JobState } from './entities';
+import {
+  deriveRunStatus,
+  formatRunDuration,
+  formatRunRows,
+  initialParamValues,
+  listedJobs,
+  paramErrors,
+  paramsFromValues,
+  stateLabel,
+} from './rules';
+import type { JobDefinition, JobState, ParamSpec } from './entities';
 
 const ALL_STATES: JobState[] = ['queued', 'running', 'succeeded', 'partial', 'failed', 'cancelled'];
 
@@ -46,3 +55,77 @@ describe('formatRunDuration', () => {
     expect(formatRunDuration('2026-01-01T00:00:10Z', '2026-01-01T00:00:00Z', 'succeeded')).toBe('0s');
   });
 });
+
+// What the worker publishes for ingest and replay (worker/jobs/).
+const INGEST: ParamSpec[] = [
+  { name: 'start', type: 'month', label: 'Start', required: true, min: '2009-01' },
+  { name: 'end', type: 'month', label: 'End', required: true, min: '2009-01', gte: 'start' },
+];
+const REPLAY: ParamSpec[] = [
+  { name: 'limit', type: 'integer', label: 'Trips to send', default: 500, min: 1, max: 5000 },
+  { name: 'messagesPerSecond', type: 'number', label: 'Messages per second', default: 10, min: 0.1, max: 100 },
+  { name: 'date', type: 'date', label: 'Pickup date' },
+];
+
+describe('listedJobs', () => {
+  it('keeps catalog order and drops unlisted jobs', () => {
+    const catalog = [
+      { type: 'ingest', listed: true },
+      { type: 'reset', listed: false },
+      { type: 'silver', listed: true },
+    ] as JobDefinition[];
+    expect(listedJobs(catalog).map((j) => j.type)).toEqual(['ingest', 'silver']);
+  });
+});
+
+describe('initialParamValues', () => {
+  it('starts from defaults, as strings', () => {
+    expect(initialParamValues(REPLAY)).toEqual({ limit: '500', messagesPerSecond: '10' });
+    expect(initialParamValues(INGEST)).toEqual({});
+    expect(initialParamValues([{ name: 'dry', type: 'boolean', label: 'Dry run' }])).toEqual({ dry: 'false' });
+  });
+});
+
+describe('paramsFromValues', () => {
+  it('sends typed values and leaves out empty optional fields', () => {
+    expect(paramsFromValues(REPLAY, { limit: '200', messagesPerSecond: '2.5', date: '' })).toEqual({
+      limit: 200,
+      messagesPerSecond: 2.5,
+    });
+    expect(paramsFromValues(INGEST, { start: '2024-07', end: '2024-12' })).toEqual({ start: '2024-07', end: '2024-12' });
+    expect(paramsFromValues([{ name: 'dry', type: 'boolean', label: 'Dry run' }], { dry: 'true' })).toEqual({ dry: true });
+  });
+});
+
+describe('paramErrors', () => {
+  it('accepts a valid ingest range, including a single month', () => {
+    expect(paramErrors(INGEST, { start: '2024-07', end: '2024-12' })).toEqual({});
+    expect(paramErrors(INGEST, { start: '2024-07', end: '2024-07' })).toEqual({});
+  });
+
+  it('flags required fields and an end before its start', () => {
+    expect(paramErrors(INGEST, { start: '2024-07' })).toEqual({ end: 'Required' });
+    expect(paramErrors(INGEST, { start: '2024-09', end: '2024-07' })).toEqual({ end: 'Must be on or after Start' });
+  });
+
+  it('applies month bounds and format', () => {
+    expect(paramErrors(INGEST, { start: '2008-12', end: '2009-01' })).toEqual({ start: 'Must be 2009-01 or later' });
+    expect(paramErrors(INGEST, { start: '2024-13', end: '2024-12' }).start).toBe('Use YYYY-MM');
+  });
+
+  it('checks numbers the way the control-plane does', () => {
+    expect(paramErrors(REPLAY, { limit: '500', messagesPerSecond: '10' })).toEqual({});
+    expect(paramErrors(REPLAY, { limit: '1.5', messagesPerSecond: '10' })).toEqual({ limit: 'Must be a whole number' });
+    expect(paramErrors(REPLAY, { limit: '5001', messagesPerSecond: '10' })).toEqual({ limit: 'Must be at most 5000' });
+    expect(paramErrors(REPLAY, { limit: '10', messagesPerSecond: '0.05' })).toEqual({ messagesPerSecond: 'Must be at least 0.1' });
+    expect(paramErrors(REPLAY, { limit: 'many', messagesPerSecond: '10' })).toEqual({ limit: 'Must be a number' });
+    expect(paramErrors(REPLAY, { limit: '10', messagesPerSecond: '1', date: '07/04/2024' })).toEqual({ date: 'Use YYYY-MM-DD' });
+  });
+
+  it('only accepts listed enum options', () => {
+    const schema: ParamSpec[] = [{ name: 'mode', type: 'enum', label: 'Mode', options: ['fast', 'full'] }];
+    expect(paramErrors(schema, { mode: 'full' })).toEqual({});
+    expect(paramErrors(schema, { mode: 'slow' })).toEqual({ mode: 'Pick one of the options' });
+  });
+});
+

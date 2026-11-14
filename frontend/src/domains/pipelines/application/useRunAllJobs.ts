@@ -16,7 +16,7 @@ export type RunAllState =
   | { phase: 'stopped'; stepIndex: number; jobType: string; finalState: 'failed' | 'cancelled' }
   | { phase: 'done' };
 
-type TriggerFn = (args: { jobType: string; params: Record<string, string> }) => Promise<JobRun>;
+type TriggerFn = (args: { jobType: string; params: Record<string, unknown> }) => Promise<JobRun>;
 
 /**
  * Sequentially triggers every pipeline stage, waiting for each to reach a
@@ -41,7 +41,7 @@ export function useRunAllJobs(triggerRun: TriggerFn, onRunStarted: (runId: strin
     return () => clearTimeout(timer);
   }, [state.phase]);
 
-  async function runAll(range: Record<string, string>) {
+  async function runAll(range: Record<string, unknown>) {
     for (let i = 0; i < PIPELINE_ORDER.length; i++) {
       const jobType = PIPELINE_ORDER[i];
       setState({ phase: 'running', stepIndex: i });

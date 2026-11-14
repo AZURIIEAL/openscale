@@ -118,7 +118,7 @@ embedded real service, not mock data. The caveats are the real limits.
 | Screen | What's real | Limits |
 |---|---|---|
 | **Home** | Live container CPU/memory gauges, job history, Gold-backed revenue trend and stat cards | |
-| **Pipelines** | Triggers the real job queue end to end (control-plane → Redis → worker → Postgres), live status and logs over WebSocket, run-all chaining, cancel-all, clear data | Spark jobs can't be cancelled mid-run, so cancel restarts the worker container |
+| **Pipelines** | Triggers the real job queue end to end (control-plane → Redis → worker → Postgres), live status and logs over WebSocket, run forms generated from the job catalog, run-all chaining, Stop all (stops just the jobs' processes, not the worker), clear data | Run All is a fixed taxi chain; pipelines as data come in Phase 4d |
 | **SQL Editor** | Read-only `SELECT`/`WITH` against Postgres (Gold tables, feature table, job history) inside a read-only transaction, schema browser, query history | Postgres only; Bronze/Silver Parquet in the lake isn't queryable yet |
 | **Data Catalog** | Postgres schema browser (row counts and sample rows) and a live MinIO lake browser (object counts and sizes per layer) | Lineage is a static diagram of the five stages, not computed; no Parquet preview |
 | **Streaming** | `replay` streams real Silver trips onto Kafka; the control-plane tails the topic and pushes live trips and windowed aggregates over WebSocket. Pause, resume, cancel and ×1–×10 speed act on the running replay | One topic, `yellow-taxi-trips` |
@@ -237,15 +237,15 @@ docker-compose.yml   The whole stack as one "openscale" compose project
 The frontend container bind-mounts `./frontend`, so UI edits hot-reload
 with no rebuild. Go and Python changes need their image rebuilt.
 
-Two lists are kept in sync by hand:
+**Job types are defined once**, as `@job` functions in
+[`worker/jobs/`](worker/jobs/). The worker publishes them at startup; the
+control-plane serves the catalog (`GET /api/jobs/catalog`) and validates
+run params against each job's schema, and the Pipelines screen renders its
+run forms from it. See [worker/README.md](worker/README.md#adding-a-job).
 
-- **Job types**: `jobs.Catalog` in
-  [control-plane/internal/jobs/jobs.go](control-plane/internal/jobs/jobs.go),
-  `JOB_TABLE` in [worker/main.py](worker/main.py), and `JOB_CATALOG` in
-  [frontend/src/domains/pipelines/domain/entities.ts](frontend/src/domains/pipelines/domain/entities.ts)
-  (which leaves out `replay` and `reset` on purpose).
-- **Routes**: [frontend/src/app/router.tsx](frontend/src/app/router.tsx) and
-  [frontend/src/shared/layout/navigation.ts](frontend/src/shared/layout/navigation.ts).
+Routes are the one list still kept in sync by hand:
+[frontend/src/app/router.tsx](frontend/src/app/router.tsx) and
+[frontend/src/shared/layout/navigation.ts](frontend/src/shared/layout/navigation.ts).
 
 Tests run in CI ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)):
 `go test ./...` in `control-plane`, `python -m pytest` in `worker`,

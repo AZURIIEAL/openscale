@@ -1,7 +1,8 @@
 """Tiny Redis helpers for the job-queue worker -- only this module touches
-redis-py. Two separate concerns: the request Stream (dispatch, exactly-once
-via consumer groups) and the events Pub/Sub channel (ephemeral live-tail
-relay for the Go control-plane's WebSocket hub)."""
+redis-py. Three concerns: the request Stream (dispatch, exactly-once via
+consumer groups), the events Pub/Sub channel (ephemeral live-tail relay for
+the Go control-plane's WebSocket hub), and each run's control hash
+(cancel/pause/speed, written by the control-plane)."""
 
 import json
 import os
@@ -27,3 +28,18 @@ def ensure_consumer_group(client: "redis.Redis", stream: str, group: str) -> Non
 
 def publish_event(client: "redis.Redis", event: dict) -> None:
     client.publish(EVENTS_CHANNEL, json.dumps(event))
+
+
+def control_key(job_id: str) -> str:
+    """The per-run HASH the control-plane writes live commands into (fields
+    `cancelled`, `paused`, `speed`) -- mirrors controlKey in
+    control-plane/internal/redis."""
+    return f"openscale:jobs:{job_id}:control"
+
+
+def is_cancel_requested(client: "redis.Redis", job_id: str) -> bool:
+    return client.hget(control_key(job_id), "cancelled") == "true"
+
+
+def clear_control(client: "redis.Redis", job_id: str) -> None:
+    client.delete(control_key(job_id))

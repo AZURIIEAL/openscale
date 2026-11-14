@@ -186,8 +186,8 @@ services:
       # Grants access to the host's Docker daemon so internal/docker can
       # inspect sibling containers (openscale-minio, openscale-kafka, ...)
       # for /api/system-health, and start/stop/restart them for the
-      # Infrastructure screen and cancel-all. The :ro is on the socket file
-      # itself, not the API: anything reachable over the socket is allowed.
+      # Infrastructure screen. The :ro is on the socket file itself, not
+      # the API: anything reachable over the socket is allowed.
       - /var/run/docker.sock:/var/run/docker.sock:ro
     depends_on:
       postgres:

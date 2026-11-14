@@ -1,36 +1,24 @@
 """
 The `train` job: runs worker.ml.training.train_fare_model (Silver -> a
-fare-prediction model, logged to MLflow). In-process call, not a
-subprocess -- this is the worker's own owned copy of the pipeline code,
-not a reference to etl-exposure.
+fare-prediction model, logged to MLflow). This is the worker's own copy of
+the pipeline code, not a reference to etl-exposure.
 """
 
-from typing import Callable
-
 from ml.training.train_fare_model import train as train_fare_model
+from registry import JobContext, job
 
 
-def run(
-    params: dict, on_log_line: Callable[[str], None]
-) -> tuple[str, str | None, list[str], int | None, dict | None]:
-    """Runs the train job. Returns (status, error, log_lines, rows_processed, metrics).
-
-    A single Spark-load-then-fit operation, not a per-unit loop --
-    succeeded/failed only. rows_processed is the sampled training-set size
-    train_fare_model.train() reports as "rows". metrics carries mae/rmse/r2
-    for Dashboards' "model quality over retrains" chart.
-    """
-    log_lines: list[str] = []
-    try:
-        result = train_fare_model()
-        line = str(result)
-        log_lines.append(line)
-        on_log_line(line)
-    except Exception as exc:
-        error = f"{type(exc).__name__}: {exc}"
-        log_lines.append(error)
-        on_log_line(error)
-        return "failed", error, log_lines, None, None
-
-    metrics = {"mae": result["mae"], "rmse": result["rmse"], "r2": result["r2"]}
-    return "succeeded", None, log_lines, result.get("rows"), metrics
+@job(
+    "train",
+    "Train Fare Model",
+    "Samples Silver trips, trains a fare-prediction model, logs it to MLflow.",
+    stage="Model",
+    order=50,
+)
+def train(ctx: JobContext) -> None:
+    """One Spark load-then-fit. rows is the sampled training-set size;
+    metrics carries mae/rmse/r2 for Dashboards' model-quality chart."""
+    result = train_fare_model()
+    ctx.log(result)
+    ctx.set_rows(result.get("rows"))
+    ctx.set_metrics({"mae": result["mae"], "rmse": result["rmse"], "r2": result["r2"]})

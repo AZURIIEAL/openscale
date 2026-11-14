@@ -38,20 +38,34 @@ when some months landed in Bronze and others were rejected), and
    `{job_id, job_type, params, submitted_at}`.
 2. `mark_running` in `control_plane.job_runs`. If the run was already
    cancelled, it's skipped without any output.
-3. Look up the handler in `JOB_TABLE` and call it, publishing every log
-   line as it happens to the `openscale:jobs:events` pub/sub channel.
+3. Run the job in its own child process ([`runner.py`](runner.py) starts
+   `python -m job_child`), publishing every log line as it happens to the
+   `openscale:jobs:events` pub/sub channel.
 4. `mark_terminal` with status, exit code, error, full log,
    `rows_processed` and `metrics`, publish the final status event, then
    `XACK`.
 
-The worker handles one job at a time. Postgres is the system of record;
-Redis is only used for dispatch and live events.
+At startup, before step 1, the worker discovers every `@job` in `jobs/`,
+publishes them to `control_plane.job_definitions` (the catalog the
+control-plane serves), and marks any run still `running` as failed: with
+one worker container, such a run was cut off by a crash or restart.
 
-**Live control (replay only):** before each message, `replay` reads the
-Redis hash `openscale:jobs:{job_id}:control` (`paused`, `speed`,
-`cancelled`), which the control-plane writes from the Streaming screen's
-buttons. Spark jobs don't check for cancellation, so the control-plane's
-cancel-all restarts this container to stop one.
+The worker handles one job at a time. Postgres is the system of record;
+Redis is only used for dispatch, live events and run control.
+
+**Child process per run.** The child writes JSON lines on stdout (log
+lines, then one result); everything else it prints, Spark's JVM included,
+goes to stderr, which ends up in the container log. If a child dies
+without a result, the run fails with its exit code and last stderr line.
+
+**Cancelling.** The control-plane sets `cancelled` in the run's Redis hash
+`openscale:jobs:{job_id}:control` (from Stop all or the Streaming screen).
+The runner sees it within half a second and gives the job 5 s to stop on
+its own; jobs that call `ctx.check_cancelled()` (and `replay`, which also
+reads `paused` and `speed` from the same hash) stop cleanly. Otherwise the
+runner sends SIGTERM to the job's process group, which also takes down
+Spark's JVM, and SIGKILL 10 s later. The worker keeps running and takes
+the next job.
 
 ## Configuration
 
@@ -90,20 +104,52 @@ If builds can't reach PyPI on your network, use
 Queue a job without the UI:
 
 ```bash
-curl -X POST localhost:8080/api/jobs/silver/run -d '{}'
+curl localhost:8080/api/jobs/catalog
+curl -X POST localhost:8080/api/projects/nyc-taxi/jobs/silver/run -d '{}'
 ```
 
 ## Adding a job
 
-1. Create `jobs/<name>.py` with
-   `run(params: dict, on_log_line: Callable[[str], None]) -> (status, error, log_lines, rows_processed, metrics)`.
-   Call `on_log_line` for every line you want streamed live, and return
-   them all in `log_lines` too.
-2. Register it in `JOB_TABLE` in `main.py`.
-3. Add it to `jobs.Catalog` in `control-plane/internal/jobs/jobs.go`. The
-   control-plane rejects unknown types before queueing.
-4. To show it on the Pipelines screen, add it to `JOB_CATALOG` in
-   `frontend/src/domains/pipelines/domain/entities.ts`.
+Write one decorated function in a new module under `jobs/`. Nothing else
+changes: the worker publishes it at startup, the control-plane validates
+run params against its schema, and the Pipelines screen renders its run
+form from the same schema.
+
+```python
+from registry import JobContext, JobFailed, Param, job
+
+
+@job(
+    "row_count",                       # type: lowercase, digits, underscores
+    "Count rows",                      # label
+    "Counts a dataset's rows.",        # description
+    params_schema=[
+        Param("dataset", "dataset", "Dataset", required=True),
+        Param("min_rows", "integer", "Fail below", default=1, min=0),
+    ],
+    stage="Gold",                      # optional badge
+    order=60,                          # position in the catalog
+)
+def row_count(ctx: JobContext) -> None:
+    ctx.log(f"counting {ctx.params['dataset']} in {ctx.project_id}")
+    ...
+    ctx.check_cancelled()              # call in loops so cancel is quick
+    ctx.set_rows(n)
+    if n < ctx.params.get("min_rows", 1):
+        raise JobFailed(f"only {n} rows")
+```
+
+- **Outcome:** returning means `succeeded`; `ctx.set_partial(msg)` makes
+  it `partial`. `raise JobFailed(msg)` stores `msg` as the error. Any other
+  exception fails the run with `Type: message`, and the traceback goes to
+  the container log.
+- **Param types:** `string`, `number`, `integer`, `boolean`, `enum` (with
+  `options`), `date`, `month`, `dataset` (a dataset name in the run's
+  project). `min`/`max` bound numbers, and also dates/months as ISO
+  strings. `gte="start"` requires a field to be on or after an earlier
+  one. A bad schema raises at import, so the worker won't start with it.
+- **`listed=False`** keeps a job off the Pipelines run list when another
+  screen or API queues it (as with `replay`, `reset` and the dataset jobs).
 
 ## Known limitations
 
@@ -111,7 +157,8 @@ curl -X POST localhost:8080/api/jobs/silver/run -d '{}'
   so the image only runs Spark jobs on x86-64. On ARM64 (e.g. Apple
   Silicon, Ampere) the path is `java-21-openjdk-arm64`.
 - Only one worker container runs. The consumer group would let you scale
-  out, but cancel-all assumes a single container.
+  out, but marking `running` runs as failed at startup and retiring
+  unpublished job types both assume a single worker.
 
 ## Dataset jobs
 

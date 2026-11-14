@@ -13,13 +13,13 @@ Deliberate: a flat rate is simpler for a UI control to expose than a
 day-simulation speed multiplier, and this is a live-demo/dashboard feature,
 not a scientific replay.
 
-Live control: when the control-plane enqueues this job it merges a
-`job_id` into the params (see jobs_handler.go's Run), which this job uses
-to poll a per-run Redis HASH at openscale:jobs:{job_id}:control (fields
-`paused`, `speed`, `cancelled`) once per row, before each send -- letting
-the Streaming screen's Pause/Resume, Cancel, and x1/x2/x3/x5/x10 speed
-controls act on the *currently in-flight* send loop live, not just at job
-start. See POST /api/jobs/{id}/control on the Go side.
+Live control: this job polls its run's Redis control hash
+(redis_client.control_key: fields `paused`, `speed`, `cancelled`) once per
+row, before each send, and between sends while it sleeps -- letting the
+Streaming screen's Pause/Resume, Cancel, and x1/x2/x3/x5/x10 speed controls
+act on the *currently in-flight* send loop live. It stops itself on cancel
+well inside the runner's grace period, so its log ends with the trip count
+rather than a kill. See POST /api/jobs/{id}/control on the Go side.
 """
 
 import json
@@ -32,6 +32,8 @@ from kafka import KafkaProducer
 from pyspark.sql import functions as F
 
 from common.db import get_redis_client
+from redis_client import control_key as run_control_key
+from registry import JobCancelled, JobContext, Param, job
 from spark.common.loader import load_silver_trips
 from spark.common.spark_session import get_spark
 
@@ -90,10 +92,6 @@ def _load_day(pickup_date: str | None) -> tuple[str, pd.DataFrame]:
         spark.stop()
 
 
-def _control_key(job_id: str) -> str:
-    return f"openscale:jobs:{job_id}:control"
-
-
 def _poll_control(r, control_key: str, log: Callable[[str], None], paused_flag: list[bool]) -> tuple[bool, dict]:
     """Checks the control hash once, blocking (in short polls) while
     paused==\"true\". Returns (cancelled, state) -- state is whatever the
@@ -121,37 +119,47 @@ def _poll_control(r, control_key: str, log: Callable[[str], None], paused_flag: 
     return False, state
 
 
-def run(
-    params: dict, on_log_line: Callable[[str], None]
-) -> tuple[str, str | None, list[str], int | None, dict | None]:
-    """Runs the replay job. Returns (status, error, log_lines, rows_processed, metrics).
-    metrics is always None -- only the train job reports metrics.
-    rows_processed is the count of trips actually sent to Kafka.
+def _sleep_unless_cancelled(r, control_key: str | None, seconds: float) -> None:
+    """Sleeps between sends in short slices, returning early once the run is
+    cancelled -- the next _poll_control then sees it. At the slowest rate a
+    send gap is 10s, longer than the runner's cancel grace period."""
+    end = time.monotonic() + seconds
+    while True:
+        remaining = end - time.monotonic()
+        if remaining <= 0:
+            return
+        time.sleep(min(remaining, PAUSE_POLL_SECONDS))
+        if r is not None and r.hget(control_key, "cancelled") == "true":
+            return
 
-    status is 'succeeded' unless an uncaught exception propagates (e.g. no
-    Silver data at all, or the broker is unreachable), then 'failed' with
-    whatever was sent so far as a partial rows_processed count. 'cancelled'
-    is also possible now -- see the control-hash polling below -- and is
-    already a valid terminal Status on the Go side, so no enum change was
-    needed there. No 'partial' case here -- unlike ingest's per-period
-    outcomes, a replay either completes its send loop or it doesn't."""
-    log_lines: list[str] = []
-    sent = 0
 
-    date_param, limit, messages_per_second = _resolve_params(params)
+@job(
+    "replay",
+    "Replay Trips",
+    "Replays real Silver trips onto Kafka's yellow-taxi-trips topic at a configurable rate.",
+    params_schema=[
+        Param("limit", "integer", "Trips to send", default=DEFAULT_LIMIT, min=1, max=MAX_LIMIT),
+        Param(
+            "messagesPerSecond",
+            "number",
+            "Messages per second",
+            default=DEFAULT_MESSAGES_PER_SECOND,
+            min=0.1,
+            max=MAX_MESSAGES_PER_SECOND,
+        ),
+        Param("date", "date", "Pickup date", description="Defaults to the latest day in Silver."),
+    ],
+    # Started from the Streaming screen's replay controls, not the run list.
+    listed=False,
+)
+def replay(ctx: JobContext) -> None:
+    """rows is the count of trips actually sent to Kafka. Fails if there is
+    no Silver data or the broker is unreachable; cancelled from the
+    Streaming screen or cancel-all."""
+    date_param, limit, messages_per_second = _resolve_params(ctx.params)
 
-    def log(line: str) -> None:
-        log_lines.append(line)
-        on_log_line(line)
-
-    # job_id is merged into params by the control-plane's Run handler when
-    # it enqueues this job (see jobs_handler.go) -- absent only if replay.py
-    # is invoked some other way (e.g. a direct test call), in which case
-    # live control is simply unavailable and the loop runs at a flat,
-    # unchangeable speed like before.
-    job_id = params.get("job_id")
-    r = get_redis_client() if job_id else None
-    control_key = _control_key(job_id) if job_id else None
+    r = get_redis_client() if ctx.job_id else None
+    control_key = run_control_key(ctx.job_id) if ctx.job_id else None
     paused_flag = [False]
     if r is not None:
         # HSETNX per field, not a blanket HSET -- a pause/cancel/speed
@@ -159,62 +167,53 @@ def run(
         # this run is still "queued" in the UI, before the worker has even
         # picked it up. A blanket HSET at init would silently clobber that
         # command back to the default the instant this job starts; HSETNX
-        # only fills in fields nobody's touched yet.
+        # only fills in fields nobody's touched yet. The worker deletes the
+        # key when the run ends; the TTL is the safety net.
         r.hsetnx(control_key, "paused", "false")
         r.hsetnx(control_key, "speed", "1")
         r.hsetnx(control_key, "cancelled", "false")
         r.expire(control_key, CONTROL_KEY_TTL_SECONDS)
 
-    try:
-        pickup_date, day_df = _load_day(date_param)
-        if len(day_df) > limit:
-            day_df = day_df.head(limit)
-        total = len(day_df)
+    pickup_date, day_df = _load_day(date_param)
+    if len(day_df) > limit:
+        day_df = day_df.head(limit)
+    total = len(day_df)
 
-        log(f"replaying {total} trips from {pickup_date} to '{TRIPS_TOPIC}' at {messages_per_second}/s")
+    ctx.log(f"replaying {total} trips from {pickup_date} to '{TRIPS_TOPIC}' at {messages_per_second}/s")
 
-        if total == 0:
-            log(f"no Silver trips found for {pickup_date}")
-            return "succeeded", None, log_lines, 0, None
+    if total == 0:
+        ctx.log(f"no Silver trips found for {pickup_date}")
+        ctx.set_rows(0)
+        return
 
-        producer = KafkaProducer(
-            bootstrap_servers=os.environ.get("KAFKA_BROKER", "kafka:9092"),
-            value_serializer=lambda v: json.dumps(v).encode("utf-8"),
-        )
-        delay_seconds = 1.0 / messages_per_second
+    producer = KafkaProducer(
+        bootstrap_servers=os.environ.get("KAFKA_BROKER", "kafka:9092"),
+        value_serializer=lambda v: json.dumps(v).encode("utf-8"),
+    )
+    delay_seconds = 1.0 / messages_per_second
 
-        for _, row in day_df.iterrows():
-            speed = 1.0
-            if r is not None:
-                cancelled, state = _poll_control(r, control_key, log, paused_flag)
-                if cancelled:
-                    log(f"cancelled after {sent}/{total} trips")
-                    r.delete(control_key)
-                    return "cancelled", None, log_lines, sent or None, None
-                speed = float(state.get("speed") or "1")
+    sent = 0
+    for _, row in day_df.iterrows():
+        speed = 1.0
+        if r is not None:
+            cancelled, state = _poll_control(r, control_key, ctx.log, paused_flag)
+            if cancelled:
+                producer.flush()
+                ctx.log(f"cancelled after {sent}/{total} trips")
+                raise JobCancelled()
+            speed = float(state.get("speed") or "1")
 
-            # pandas' own JSON encoder handles Timestamps/NaN/numpy dtypes
-            # correctly, unlike a bare json.dumps(row.to_dict()).
-            record = json.loads(row.to_json(date_format="iso"))
-            producer.send(TRIPS_TOPIC, record)
-            sent += 1
-            if sent % LOG_EVERY == 0:
-                log(f"sent {sent}/{total} trips")
-            # Read fresh every iteration (not just once before the loop) so
-            # a live speed change from the Streaming screen takes effect on
-            # the very next send, not just at job start.
-            time.sleep(delay_seconds / speed)
+        # pandas' own JSON encoder handles Timestamps/NaN/numpy dtypes
+        # correctly, unlike a bare json.dumps(row.to_dict()).
+        record = json.loads(row.to_json(date_format="iso"))
+        producer.send(TRIPS_TOPIC, record)
+        sent += 1
+        ctx.set_rows(sent)
+        if sent % LOG_EVERY == 0:
+            ctx.log(f"sent {sent}/{total} trips")
+        # speed is read fresh every iteration, so a live change from the
+        # Streaming screen takes effect on the very next send.
+        _sleep_unless_cancelled(r, control_key, delay_seconds / speed)
 
-        producer.flush()
-    except Exception as exc:
-        error = f"{type(exc).__name__}: {exc}"
-        log(error)
-        return "failed", error, log_lines, sent or None, None
-
-    if r is not None:
-        # The TTL is a safety net, not the primary cleanup path -- delete
-        # explicitly now that the send loop is done with it.
-        r.delete(control_key)
-
-    log(f"sent {sent}/{sent} trips to topic '{TRIPS_TOPIC}'")
-    return "succeeded", None, log_lines, sent, None
+    producer.flush()
+    ctx.log(f"sent {sent}/{sent} trips to topic '{TRIPS_TOPIC}'")

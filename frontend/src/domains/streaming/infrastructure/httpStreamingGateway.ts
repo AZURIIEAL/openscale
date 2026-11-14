@@ -80,9 +80,11 @@ export const httpStreamingGateway: StreamingGateway = {
   // (POST /api/projects/{p}/jobs/{type}/run has no pipelines-specific coupling) rather
   // than duplicating apiPost + JobRun mapping here.
   async startReplay(projectSlug, params) {
-    const body: Record<string, string> = {
-      limit: String(params.limit),
-      messagesPerSecond: String(params.messagesPerSecond),
+    // Typed values: the run endpoint validates them against replay's
+    // params schema (limit: integer, messagesPerSecond: number).
+    const body: Record<string, unknown> = {
+      limit: params.limit,
+      messagesPerSecond: params.messagesPerSecond,
     };
     if (params.date) body.date = params.date;
     return httpJobControlGateway.triggerRun(projectSlug, 'replay', body);

@@ -71,11 +71,12 @@ Every route is registered in
 | GET | `/api/container-stats` | Per-container CPU/memory plus host totals |
 | GET / POST | `/api/projects` | List projects · create one (`{"name", "slug"?, "description"?}`, slug derived from the name when omitted) |
 | GET / PATCH / DELETE | `/api/projects/{p}` | One project · rename/describe/`aiSettings` · archive (runs are kept). `{p}` is the id **or the slug** everywhere below |
-| POST | `/api/projects/{p}/jobs/{type}/run` | Queue a job. Body = JSON params. Returns the run (`202`) |
+| GET | `/api/jobs/catalog` | Every job type the worker publishes: label, description, stage, `listed`, `paramsSchema` |
+| POST | `/api/projects/{p}/jobs/{type}/run` | Queue a job. Body = JSON params, validated against the type's `paramsSchema` (`400` if they don't fit, `404` for a type not in the catalog). Returns the run (`202`) |
 | GET | `/api/projects/{p}/jobs/runs?limit=&offset=` | Page of the project's runs, newest first, plus `hasMore` |
 | DELETE | `/api/projects/{p}/jobs/runs` | Delete the project's finished runs (queued/running are kept) |
-| POST | `/api/projects/{p}/jobs/cancel-all` | Cancel the project's queued and running runs; restarts the worker only if one of *this* project's runs was running |
-| POST | `/api/projects/{p}/jobs/{id}/control` | Live control for a running replay: `{"action": "pause" \| "resume" \| "cancel" \| "setSpeed", "speedMultiplier": 1\|2\|3\|5\|10}` |
+| POST | `/api/projects/{p}/jobs/cancel-all` | Cancel the project's queued and running runs. Running jobs are stopped by the worker; the worker container keeps running |
+| POST | `/api/projects/{p}/jobs/{id}/control` | Live control: `{"action": "cancel"}` for any running job; `pause` \| `resume` \| `setSpeed` (`"speedMultiplier": 1\|2\|3\|5\|10`) for a running replay |
 | GET | `/api/ws/jobs/{id}` | WebSocket: live `status`/`log` events for one run (run ids are global, so this stays unscoped) |
 | GET | `/api/projects/{p}/dashboards/overview` | All Dashboards-screen chart data |
 | GET | `/api/projects/{p}/home/stats` | Home stat cards |
@@ -98,12 +99,17 @@ Every route under `/api/projects/{p}` goes through
 resolves the id or slug once, answers `404` for an unknown project, and puts
 it in the request context -- the one place project scoping is enforced.
 
-Job types for `/api/projects/{p}/jobs/{type}/run` come from `jobs.Catalog`
-([`internal/jobs/jobs.go`](internal/jobs/jobs.go)): `ingest`
-(`{"start":"2024-07","end":"2024-12"}`), `silver`, `gold`, `features`,
-`train`, `replay` (`{"limit":500,"messagesPerSecond":10}`), `reset`.
+Job types come from `control_plane.job_definitions`, which the worker
+fills at startup from its `@job` registry (see the
+[worker README](../worker/README.md#adding-a-job)); this service only reads
+it. `jobs.Definition.ValidateParams`
+([`internal/jobs/definitions.go`](internal/jobs/definitions.go)) checks a
+run's params against the schema: no unknown keys, required fields present,
+values of the declared type within their bounds, `gte` pairs in order.
+Numbers must be JSON numbers, not strings.
 
 ```bash
+curl localhost:8080/api/jobs/catalog
 curl localhost:8080/api/projects
 curl -X POST localhost:8080/api/projects/nyc-taxi/jobs/ingest/run -d '{"start":"2024-07","end":"2024-07"}'
 curl 'localhost:8080/api/projects/nyc-taxi/jobs/runs?limit=5'
@@ -115,21 +121,24 @@ curl 'localhost:8080/api/projects/nyc-taxi/jobs/runs?limit=5'
    `{job_id, job_type, params, submitted_at}` onto the Redis Stream
    `openscale:jobs:requests`. If the enqueue fails, the row is marked
    `failed` right away.
-2. The worker takes the job, marks it `running`, and publishes
-   `{"job_id","type":"status"|"log",...}` events on the
-   `openscale:jobs:events` channel.
+2. The worker takes the job, marks it `running`, runs it in a child
+   process, and publishes `{"job_id","type":"status"|"log",...}` events on
+   the `openscale:jobs:events` channel.
 3. `internal/ws`'s hub fans those events out to every
    `/api/ws/jobs/{id}` subscriber. Each new WebSocket is first sent the
    run's current row from Postgres, and closed right away if the run has
    already finished.
-4. The worker writes the final status (`succeeded`, `partial`, `failed`),
-   the full log, `rows_processed` and metrics to Postgres, which is the
-   system of record.
+4. The worker writes the final status (`succeeded`, `partial`, `failed`,
+   `cancelled`), the full log, `rows_processed` and metrics to Postgres,
+   which is the system of record. A run already marked `cancelled` stays
+   cancelled.
 
-Live control (`/control`) writes fields into the Redis hash
-`openscale:jobs:{id}:control`, which `replay` checks before every message.
-Spark stages don't check it, so `cancel-all` restarts the worker container
-to stop one mid-run.
+Cancelling writes `cancelled` into the run's Redis hash
+`openscale:jobs:{id}:control`, through `/control` for one run or
+`cancel-all` for a project. `cancel-all` also marks the rows `cancelled`
+straight away. The worker's runner watches the flag and stops that run's
+process (see the worker README). `replay` also reads `paused` and `speed`
+from the same hash.
 
 ## Configuration
 
@@ -168,12 +177,10 @@ to stop one mid-run.
 3. Register the route in `router.go`.
 4. Add the matching gateway method in the frontend domain that uses it.
 
-**A new job type:**
-1. Add it to `jobs.Catalog`.
-2. Add a module to `worker/jobs/` and register it in `JOB_TABLE` in
-   `worker/main.py` (see the [worker README](../worker/README.md#adding-a-job)).
-3. If it should appear on the Pipelines screen, add it to `JOB_CATALOG` in
-   `frontend/src/domains/pipelines/domain/entities.ts`.
+**A new job type:** no change here. Write one `@job` function in
+`worker/jobs/` (see the [worker README](../worker/README.md#adding-a-job));
+the worker publishes it, and this service and the frontend read it from
+the catalog.
 
 **A new migration:** add `db/migrations/000N_description.sql`. It's applied
 in filename order on the next startup. `db/queries/*.sql` + `sqlc.yaml`

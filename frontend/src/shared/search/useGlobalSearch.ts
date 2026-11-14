@@ -4,9 +4,10 @@ import { NAV_ENTRIES, navHref } from '@/shared/layout/navigation';
 import { useCurrentProject } from '@/shared/project/useCurrentProject';
 import { useProjectsList } from '@/shared/project/useProjects';
 import { projectPath } from '@/shared/project/rules';
-import { JOB_CATALOG } from '@/domains/pipelines/domain/entities';
+import { listedJobs } from '@/domains/pipelines/domain/rules';
 import { stateLabel, formatRunTime } from '@/domains/pipelines/domain/rules';
 import { httpJobsGateway } from '@/domains/pipelines/infrastructure/httpJobsGateway';
+import { useJobCatalog } from '@/domains/pipelines/application/useJobCatalog';
 import { httpQueryGateway } from '@/domains/sql-editor/infrastructure/httpQueryGateway';
 import { useQueryTarget } from '@/domains/sql-editor/application/useQueryTarget';
 import { quotedTableRef } from '@/domains/data-catalog/domain/rules';
@@ -17,7 +18,7 @@ const EMPTY_RESULTS: SearchResults = { project: [], screen: [], job: [], table: 
 
 /**
  * Search across everything this app already knows about, real data only:
- * the project list and static screen/job catalogs (no extra fetch), plus
+ * the project list, the screen list and the job catalog (all cached), plus
  * the SQL Editor's table catalog and the current project's run history
  * (both existing endpoints, reused as-is). Screen, job and run results
  * open inside the current project; with no project in the URL they fall
@@ -30,6 +31,7 @@ export function useGlobalSearch(query: string, enabled: boolean): { results: Sea
   const { slug } = useCurrentProject();
   const { data: projects } = useProjectsList();
   const target = useQueryTarget();
+  const { data: jobCatalog } = useJobCatalog();
 
   const catalogQuery = useQuery({
     queryKey: ['search', slug, 'catalog', target.legacy],
@@ -58,7 +60,8 @@ export function useGlobalSearch(query: string, enabled: boolean): { results: Sea
       .slice(0, MAX_RESULTS_PER_CATEGORY)
       .map((e) => ({ id: `screen:${e.path}`, category: 'screen' as const, title: e.label, subtitle: e.subtitle, path: navHref(e, slug || undefined) }));
 
-    const job = JOB_CATALOG.filter((j) => matchesQuery(trimmed, j.label, j.type, j.stage, j.description))
+    const job = listedJobs(jobCatalog ?? [])
+      .filter((j) => matchesQuery(trimmed, j.label, j.type, j.stage, j.description))
       .slice(0, MAX_RESULTS_PER_CATEGORY)
       .map((j) => ({
         id: `job:${j.type}`,
@@ -94,7 +97,7 @@ export function useGlobalSearch(query: string, enabled: boolean): { results: Sea
       }));
 
     return { project, screen, job, table, run };
-  }, [active, trimmed, slug, projects, catalogQuery.data, runsQuery.data]);
+  }, [active, trimmed, slug, projects, jobCatalog, catalogQuery.data, runsQuery.data]);
 
   const isLoading = active && (catalogQuery.isFetching || runsQuery.isFetching);
   const total = results.project.length + results.screen.length + results.job.length + results.table.length + results.run.length;
