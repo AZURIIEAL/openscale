@@ -26,6 +26,7 @@ connectors and a pipeline builder, is on the
 - [Repo layout](#repo-layout)
 - [Development](#development)
 - [Troubleshooting](#troubleshooting)
+- [Deploying](#deploying)
 - [Security](#security)
 - [Design principles](#design-principles)
 
@@ -90,18 +91,18 @@ and the Gold/feature tables, but keeps job history.
 
 ## Services, ports and logins
 
-Everything binds to `localhost`. The credentials are **local development
-defaults**. Change them before exposing anything (see [Security](#security)).
+The credentials are **local development defaults**. To let other people
+use OpenScale, see [Deploying](#deploying), not these ports.
 
 | Service | URL / address | Login |
 |---|---|---|
 | **OpenScale console** | http://localhost:5173 | none |
 | Control-plane API | http://localhost:8080 (`/healthz`, `/metrics`, `/api/*`) | none |
-| Grafana | http://localhost:3000 | `admin` / `admin`; anonymous users can view |
-| Prometheus | http://localhost:9090 | none |
+| Grafana | http://localhost:3000/grafana/ | `admin` / `admin`; anonymous users can view |
+| Prometheus | http://localhost:9090/prometheus/ | none |
 | MinIO console | http://localhost:9101 | `minioadmin` / `minioadmin` |
 | MinIO S3 API | http://localhost:9000 | same |
-| JupyterLab | http://localhost:8888/lab?token=openscale-dev | token `openscale-dev` |
+| JupyterLab | http://localhost:8888/jupyter/lab?token=openscale-dev | token `openscale-dev` |
 | MLflow | http://localhost:5000 | none |
 | Postgres | `localhost:5432`, db `openscale` | `openscale` / `openscale` |
 | Redis | `localhost:6379` | none |
@@ -109,6 +110,12 @@ defaults**. Change them before exposing anything (see [Security](#security)).
 
 The Postgres, Redis and Kafka exporters have no host ports. Only
 Prometheus reads them.
+
+The console's dev server also proxies `/api`, `/mlflow/`, `/jupyter/`,
+`/grafana/` and `/prometheus/` to those services, so the browser only ever
+needs port 5173. That's what lets another machine on your network use
+OpenScale at `http://<this machine's IP>:5173`, embedded tools and console
+links included.
 
 ## What's built
 
@@ -197,11 +204,11 @@ folder.
 Dashboards:
 
 - **OpenScale · Control plane & pipelines**
-  (http://localhost:3000/d/openscale-control-plane): API request rate,
+  (http://localhost:3000/grafana/d/openscale-control-plane): API request rate,
   5xx %, p95 latency per route, runtime stats, and job runs by type and
   status.
 - **OpenScale · Infrastructure**
-  (http://localhost:3000/d/openscale-infrastructure): up/down per backend,
+  (http://localhost:3000/grafana/d/openscale-infrastructure): up/down per backend,
   then MinIO, Postgres, Redis and Kafka sections.
 
 The config lives in [`observability/`](observability/): the scrape config
@@ -223,7 +230,9 @@ scripts/         Helper scripts (build-images.sh)
 ideas/           Vision, roadmap, and tech-stack decision records
 etl-exposure/    The original standalone taxi pipeline: reference/legacy, nothing imports it
 docs/            README assets
-docker-compose.yml   The whole stack as one "openscale" compose project
+gateway/         Caddy config + image for deployments: the built console, every UI under one origin, one password
+docker-compose.yml          The whole stack as one "openscale" compose project
+docker-compose.deploy.yml   Layered on top to deploy: adds the gateway, keeps every other port on 127.0.0.1
 ```
 
 ## Development
@@ -278,14 +287,12 @@ flag that `docker compose` can't pass.)
 
 **A port is already in use.** Change the left side of that service's
 `ports:` mapping in `docker-compose.yml`. If you move the control-plane or
-frontend ports, update the frontend's `API_PROXY_TARGET` to match.
+frontend ports, only the host side changes: the frontend reaches the
+other services over the compose network.
 
-**Opening OpenScale from another machine.** Browse to
-`http://<this machine's IP>:5173`. API calls go through the frontend's
-`/api` proxy, so they work from anywhere. The MLflow, Jupyter and Grafana
-links still point at `localhost`; set `VITE_MLFLOW_BASE_URL` and
-`VITE_JUPYTER_BASE_URL` on the frontend service to this machine's IP to
-use them remotely.
+**Another machine on the network can't open it.** Use
+`http://<this machine's IP>:5173`, and allow port 5173 through this
+machine's firewall.
 
 **A Spark job dies or the worker restarts mid-job.** Spark's driver gets
 `SPARK_DRIVER_MEMORY=6g` by default (set on the `worker` service). Lower it
@@ -295,27 +302,83 @@ on a smaller machine, or ingest fewer months at once.
 [First run](#first-run-load-some-data).
 
 **A Grafana dashboard says "No data" everywhere.** Check that its targets
-are up at http://localhost:9090/targets. A tab opened before a dashboard
+are up at http://localhost:9090/prometheus/targets. A tab opened before a dashboard
 was renamed or removed keeps showing the old layout; reload it.
 
 **Don't run `etl-exposure/docker-compose.yml` at the same time.** It uses
 the same container names.
 
+## Deploying
+
+`docker-compose.deploy.yml` turns the stack into something other people can
+use from anywhere. It adds a **gateway** (Caddy) that is the only thing
+listening on the network:
+
+- it serves a production build of the console;
+- it puts the API, MLflow, Jupyter, Grafana and Prometheus under the same
+  address (`/api`, `/mlflow/`, `/jupyter/`, `/grafana/`, `/prometheus/`), so
+  every screen and link works on any domain or IP;
+- it asks for one shared user name and password before anything loads.
+
+Every other service's port is bound to `127.0.0.1`, so Postgres, Redis,
+MinIO and the rest are reachable only from the server itself.
+
+**On the server** (any Linux machine with Docker; ARM and x86 both work,
+and the stack wants about 8 GB of RAM, or more for big Spark jobs):
+
+```bash
+git clone https://github.com/AZURIIEAL/openscale.git && cd openscale
+cp .env.example .env        # set OPENSCALE_PASSWORD (and OPENSCALE_SITE, below)
+docker compose -f docker-compose.yml -f docker-compose.deploy.yml up -d --build
+```
+
+Then open `http://<server IP>/` and sign in as `openscale` with your
+password. Anyone you give the password to can use it.
+
+**A domain.** Two ways, set by `OPENSCALE_SITE` in `.env`:
+
+- `OPENSCALE_SITE=:80` (the default) serves plain HTTP. Put HTTPS in
+  front with Cloudflare: a proxied (orange-cloud) `A` record pointing at the
+  server with SSL mode **Flexible**, or a Cloudflare Tunnel to
+  `http://localhost:80`. A tunnel needs no open ports at all.
+- `OPENSCALE_SITE=openscale.example.com` makes the gateway get its own
+  Let's Encrypt certificate. Point the domain at the server (on Cloudflare,
+  DNS only / grey cloud, or orange cloud with SSL mode **Full (strict)**)
+  and open ports 80 and 443.
+
+**Opening ports on a cloud VM.** Allow TCP 80 (and 443) both in the
+provider's firewall (on Oracle Cloud, the subnet's security list) and on
+the VM itself. Oracle's Ubuntu images also block them in iptables:
+
+```bash
+sudo iptables -I INPUT 6 -p tcp -m multiport --dports 80,443 -j ACCEPT
+sudo netfilter-persistent save
+```
+
+**Updating:** `git pull`, then run the same `up -d --build` command.
+
+**Reaching the internals.** Use an SSH tunnel, e.g.
+`ssh -L 9101:localhost:9101 server` for the MinIO console.
+
 ## Security
 
-OpenScale has **no authentication**. It assumes the only person who can
-reach it is the one running it. The console can start and stop containers
-(it mounts the Docker socket), wipe the lake, and run code through
-Jupyter, and every bundled service uses a default password.
+OpenScale has **no accounts** yet (Phase 9). Locally, it assumes the only
+person who can reach it is the one running it. The console can start and
+stop containers (it mounts the Docker socket), wipe the lake, and run code
+through Jupyter, and every bundled service uses a default password.
 
-Before putting it anywhere other than `localhost`:
+So everyone who can get past the deploy gateway's password can do all of
+that. Share the password only with people you'd trust with a shell on the
+server. Also:
 
-1. Put an auth layer in front of it, e.g. Cloudflare Tunnel + Cloudflare
-   Access, an OAuth proxy, or a VPN such as Tailscale.
-2. Change the default credentials for Postgres, MinIO, Grafana and the
-   Jupyter token.
+1. Pick a long `OPENSCALE_PASSWORD`. It also becomes Grafana's admin
+   password on a fresh install.
+2. Use HTTPS (Cloudflare or `OPENSCALE_SITE`); Basic auth over plain HTTP
+   sends the password readable to anyone on the path.
 3. Don't publish the infrastructure ports (5432, 6379, 9000, 29092, …) to
-   the internet.
+   the internet. The deploy file keeps them on `127.0.0.1`.
+4. Change the default Postgres, MinIO and Jupyter credentials if anything
+   other than this stack can reach those services.
 
 ## Design principles
 

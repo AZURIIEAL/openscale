@@ -13,20 +13,23 @@ import (
 // watchedServices is the fixed set of containers this control-plane reports
 // on and controls. Names match the container_name fields in the root
 // docker-compose.yml (project "openscale").
-// Console URLs point at each service's own web UI, where one exists. Kafka,
-// Postgres, Redis, and the worker are protocol-only/headless in this stack
-// -- no UI is provisioned for them, so they're left non-clickable in the
-// frontend.
+// Console URLs point at each service's own web UI, where one exists. They
+// are paths on the app's own origin -- the frontend dev server and the
+// deploy gateway proxy each prefix to its service -- so the links work from
+// any machine, not just this one. Kafka, Postgres, Redis, and the worker
+// are protocol-only/headless in this stack, and MinIO's console holds the
+// lake's root credentials, so none of them is linked; MinIO's console is
+// still at localhost:9101 on the machine itself.
 var watchedServices = []docker.WatchedService{
-	{ID: "minio", Name: "MinIO", ContainerName: "openscale-minio", Label: "lake@9000", ConsoleURL: "http://localhost:9101"},
+	{ID: "minio", Name: "MinIO", ContainerName: "openscale-minio", Label: "lake@9000"},
 	{ID: "kafka", Name: "Kafka", ContainerName: "openscale-kafka", Label: "9092"},
 	{ID: "postgres", Name: "Postgres", ContainerName: "openscale-postgres", Label: "5432"},
 	{ID: "redis", Name: "Redis", ContainerName: "openscale-redis", Label: "6379"},
-	{ID: "prometheus", Name: "Prometheus", ContainerName: "openscale-prometheus", Label: ":9090", ConsoleURL: "http://localhost:9090"},
-	{ID: "grafana", Name: "Grafana", ContainerName: "openscale-grafana", Label: ":3000", ConsoleURL: "http://localhost:3000"},
+	{ID: "prometheus", Name: "Prometheus", ContainerName: "openscale-prometheus", Label: ":9090", ConsoleURL: "/prometheus/"},
+	{ID: "grafana", Name: "Grafana", ContainerName: "openscale-grafana", Label: ":3000", ConsoleURL: "/grafana/"},
 	{ID: "worker", Name: "Worker", ContainerName: "openscale-worker", Label: "job queue"},
-	{ID: "jupyter", Name: "Jupyter", ContainerName: "openscale-jupyter", Label: ":8888", ConsoleURL: "http://localhost:8888/lab?token=openscale-dev"},
-	{ID: "mlflow", Name: "MLflow", ContainerName: "openscale-mlflow", Label: ":5000", ConsoleURL: "http://localhost:5000"},
+	{ID: "jupyter", Name: "Jupyter", ContainerName: "openscale-jupyter", Label: ":8888", ConsoleURL: "/jupyter/lab?token=openscale-dev"},
+	{ID: "mlflow", Name: "MLflow", ContainerName: "openscale-mlflow", Label: ":5000", ConsoleURL: "/mlflow/"},
 }
 
 // findWatchedService looks up a watched service by its API-facing ID (e.g.

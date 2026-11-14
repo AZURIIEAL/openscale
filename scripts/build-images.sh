@@ -9,7 +9,8 @@
 # Compose can't do this itself: it builds through Buildx Bake, which
 # refuses `network: host` without an --allow flag compose has no way to pass.
 #
-# Usage: scripts/build-images.sh [service...]   (default: all of them)
+# Usage: scripts/build-images.sh [service...]   (default: all but gateway,
+#        which only deployments use -- build it with `gateway`)
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
@@ -22,10 +23,17 @@ declare -A CONTEXT=(
   [worker]=.
   [query-engine]=.
   [jupyter]=./jupyter
+  [gateway]=./frontend
 )
 declare -A DOCKERFILE=(
   [worker]=worker/Dockerfile
   [query-engine]=query-engine/Dockerfile
+  [gateway]=gateway/Dockerfile
+)
+# The gateway (docker-compose.deploy.yml) builds the frontend as its context
+# and pulls its Caddy config from a second, named context.
+declare -A EXTRA=(
+  [gateway]="--build-context gateway=./gateway"
 )
 
 services=("$@")
@@ -42,7 +50,8 @@ for svc in "${services[@]}"; do
   fi
   df=${DOCKERFILE[$svc]:-}
   echo "==> building openscale-$svc from $ctx${df:+ ($df)}"
-  docker build --network host -t "openscale-$svc" ${df:+-f "$df"} "$ctx"
+  # shellcheck disable=SC2086 # EXTRA holds whole flags
+  docker build --network host -t "openscale-$svc" ${df:+-f "$df"} ${EXTRA[$svc]:-} "$ctx"
   # mlflow runs the worker image with a different entrypoint.
   if [ "$svc" = worker ]; then
     docker tag openscale-worker openscale-mlflow

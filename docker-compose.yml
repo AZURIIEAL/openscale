@@ -25,6 +25,7 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+    restart: unless-stopped
 
   minio-init:
     image: pgsty/mc:latest
@@ -78,6 +79,7 @@ services:
       KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
       KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+    restart: unless-stopped
 
   postgres:
     image: postgres:16-alpine
@@ -96,6 +98,7 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+    restart: unless-stopped
 
   redis:
     image: redis:7-alpine
@@ -104,6 +107,7 @@ services:
       - "6379:6379" # online feature store + job queue (Redis Streams)
     volumes:
       - redis-data:/data
+    restart: unless-stopped
 
   prometheus:
     image: prom/prometheus:v3.5.0
@@ -113,9 +117,19 @@ services:
     volumes:
       - ./observability/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - prometheus-data:/prometheus
+    # The image's default flags, plus serving under /prometheus/ like
+    # Grafana under /grafana/. Grafana's datasource and the self-scrape
+    # job use that prefix too.
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --web.external-url=http://localhost:9090/prometheus/
+      - --web.route-prefix=/prometheus
 
   # Exporters -- translate each backend's own stats into Prometheus metrics.
   # In-network only (no host ports): Prometheus is their only reader.
+    restart: unless-stopped
+
   postgres-exporter:
     image: prometheuscommunity/postgres-exporter:v0.18.1
     container_name: openscale-postgres-exporter
@@ -124,6 +138,7 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    restart: unless-stopped
 
   redis-exporter:
     image: oliver006/redis_exporter:v1.80.0
@@ -132,6 +147,7 @@ services:
       REDIS_ADDR: "redis://redis:6379"
     depends_on:
       - redis
+    restart: unless-stopped
 
   kafka-exporter:
     image: danielqsj/kafka-exporter:v1.9.0
@@ -153,11 +169,16 @@ services:
       GF_SECURITY_ADMIN_PASSWORD: admin
       GF_AUTH_ANONYMOUS_ENABLED: "true"
       GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+      # Served under /grafana/ so the frontend's dev proxy and the deploy
+      # gateway can both put it on the app's own origin.
+      GF_SERVER_ROOT_URL: "%(protocol)s://%(domain)s:%(http_port)s/grafana/"
+      GF_SERVER_SERVE_FROM_SUB_PATH: "true"
     volumes:
       - ./observability/grafana/provisioning:/etc/grafana/provisioning:ro
       - grafana-data:/var/lib/grafana
     depends_on:
       - prometheus
+    restart: unless-stopped
 
   control-plane:
     build:
@@ -204,7 +225,8 @@ services:
       # The browser calls /api on this server's origin and Vite forwards it
       # to the control-plane over the compose network (vite.config.ts), so
       # the app also works when opened from another machine on the LAN.
-      API_PROXY_TARGET: "http://control-plane:8080"
+      # The same goes for /mlflow, /jupyter, /grafana and /prometheus.
+      OPENSCALE_PROXY_HOSTS: "compose"
     volumes:
       # Bind-mount for live-editing from the host; the anonymous volume on
       # node_modules stops the host's (possibly Windows-built, incompatible)
@@ -296,7 +318,8 @@ services:
     volumes:
       # rw: notebook 03 writes real output files.
       - ./notebooks:/home/jovyan/notebooks
-    command: start-notebook.py --ServerApp.root_dir=/home/jovyan/notebooks
+    # base_url: served under /jupyter/, like Grafana under /grafana/.
+    command: start-notebook.py --ServerApp.root_dir=/home/jovyan/notebooks --ServerApp.base_url=/jupyter/
     restart: unless-stopped
 
   mlflow:
@@ -322,7 +345,7 @@ services:
       - "5000"
       # MLflow 3's security middleware sends X-Frame-Options: SAMEORIGIN by
       # default, which would block the ML Workbench screen's iframe (a
-      # different origin, :5173 vs :5000). NONE is MLflow's own documented
+      # different origin when opened directly on :5000). NONE is MLflow's own documented
       # flag for "embed the UI in iframes from different origins" -- fine
       # here since this whole stack is localhost-only, dev-only credentials
       # throughout (see MinIO/Postgres/Grafana above).
