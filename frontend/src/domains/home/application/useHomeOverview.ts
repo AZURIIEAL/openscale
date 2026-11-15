@@ -22,8 +22,7 @@ function toRunSummary(run: JobRun): PipelineRunSummary {
 }
 
 /** "Gold tables" is a fixed fact about the system (4 Gold jobs exist,
- * see dashboards/domain), not a runtime metric -- same treatment
- * PIPELINE_ORDER already gets, so it's not worth a query. */
+ * see dashboards/domain), not a runtime metric, so it's not worth a query. */
 const GOLD_TABLE_COUNT = '4';
 
 function toHomeStats(stats: ApiHomeStats): HomeStat[] {

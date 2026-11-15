@@ -29,6 +29,7 @@ func NewRouter(
 	streamHub *streaming.StreamHub,
 	lakeClient *lake.Client,
 	engine *queryengine.Client,
+	orchestrator *Orchestrator,
 	m *metrics.Metrics,
 	frontendOrigin string,
 	maxUploadBytes int64,
@@ -64,6 +65,7 @@ func NewRouter(
 	streamingHandler := NewStreamingHandler(streamingClient, streamHub, frontendOrigin)
 	lakeHandler := NewLakeHandler(lakeClient)
 	dispatcher := NewDispatcher(database, redisClient)
+	pipelinesHandler := NewPipelinesHandler(database, redisClient, orchestrator)
 	datasetsHandler := NewDatasetsHandler(database, lakeClient, engine, dispatcher, maxUploadBytes)
 	projectQueryHandler := NewProjectQueryHandler(database, engine, maxQueryRows)
 	r.Route("/api", func(r chi.Router) {
@@ -108,6 +110,15 @@ func NewRouter(
 			r.Delete("/jobs/runs", jobsHandler.ClearRuns)
 			r.Post("/jobs/cancel-all", jobsHandler.CancelAll)
 			r.Post("/jobs/{id}/control", jobsHandler.Control)
+
+			r.Get("/pipelines", pipelinesHandler.List)
+			r.Post("/pipelines", pipelinesHandler.Create)
+			r.Put("/pipelines/{name}", pipelinesHandler.Update)
+			r.Delete("/pipelines/{name}", pipelinesHandler.Delete)
+			r.Post("/pipelines/{name}/run", pipelinesHandler.Run)
+			r.Get("/pipeline-runs", pipelinesHandler.ListRuns)
+			r.Get("/pipeline-runs/{id}", pipelinesHandler.GetRun)
+			r.Post("/pipeline-runs/{id}/cancel", pipelinesHandler.CancelRun)
 
 			r.Get("/dashboards/overview", dashboardsHandler.Overview)
 			r.Get("/home/stats", dashboardsHandler.HomeStats)

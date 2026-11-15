@@ -130,8 +130,8 @@ Dashboards and Streaming are still hardcoded to the taxi pipeline, so
 `RequireFeature` gates them to the project flagged `legacy_taxi` (the
 `nyc-taxi` sample) until Phases 4 and 5 make them per-project rows.
 Pipelines is open to every project: it lists the catalog jobs whose
-`requiresFeature` the project has, and only the taxi project gets Run All
-and Clear data.
+`requiresFeature` the project has, above them the project's saved pipelines
+(`PipelinesPanel`, `PipelineEditor`), and only the taxi project gets Clear data.
 4. If it needs data, add the endpoint to the control-plane first, then an
    `http*Gateway` that calls it through `shared/api/httpClient`.
 

@@ -25,10 +25,8 @@ const STATUS_LED: Record<ConnectionStatus, Status> = {
   disconnected: 'crit',
 };
 
-// Mirrors pipelines/application/waitForRunTerminal.ts's own TERMINAL_STATES
-// (not exported there, so duplicated here rather than reaching into that
-// module's internals) -- a replay run is "active" (eligible for
-// pause/resume/cancel/speed control) until it reaches one of these.
+// A replay run is "active" (eligible for pause/resume/cancel/speed
+// control) until it reaches one of these.
 const TERMINAL_STATES: JobState[] = ['succeeded', 'partial', 'failed', 'cancelled'];
 
 /**

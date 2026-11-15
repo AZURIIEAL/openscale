@@ -77,3 +77,46 @@ export interface JobDefinition {
  * paramsFromValues() turns it into the typed body the run endpoint
  * validates. */
 export type ParamValues = Record<string, string | string[]>;
+
+/** One job of a pipeline, queued with `params` when its turn comes. */
+export interface PipelineStep {
+  jobType: string;
+  params: Record<string, unknown>;
+}
+
+/** A saved chain of jobs (control-plane pipelines.Pipeline). */
+export interface Pipeline {
+  id: string;
+  projectId: string;
+  name: string;
+  description: string;
+  steps: PipelineStep[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type PipelineRunState = 'running' | 'succeeded' | 'failed' | 'cancelled';
+
+/** The job run queued for one step of a pipeline run. */
+export interface PipelineStepJob {
+  stepIndex: number;
+  runId: string;
+  status: JobState;
+}
+
+/** One execution of a pipeline; the control-plane's orchestrator queues each
+ * step after the previous one succeeds. `steps` are the steps it started
+ * with, so editing the pipeline doesn't change it. */
+export interface PipelineRun {
+  id: string;
+  projectId: string;
+  pipelineId?: string;
+  pipelineName: string;
+  steps: PipelineStep[];
+  status: PipelineRunState;
+  currentStep: number;
+  error?: string;
+  submittedAt: string;
+  finishedAt?: string;
+  jobs: PipelineStepJob[];
+}

@@ -112,10 +112,12 @@ func (d *DB) ListJobRuns(ctx context.Context, projectID string, limit, offset in
 
 // ClearTerminalRuns deletes every run of one project that isn't currently
 // queued or running, so "clear history" can't make an in-flight job's row
-// vanish out from under its live log panel.
+// vanish out from under its live log panel. Finished steps of a running
+// pipeline stay too: the orchestrator would otherwise queue them again.
 func (d *DB) ClearTerminalRuns(ctx context.Context, projectID string) error {
 	_, err := d.pool.Exec(ctx,
-		`DELETE FROM control_plane.job_runs WHERE project_id = $1::uuid AND status NOT IN ('queued', 'running')`,
+		`DELETE FROM control_plane.job_runs j WHERE project_id = $1::uuid AND status NOT IN ('queued', 'running')
+		   AND NOT EXISTS (SELECT 1 FROM control_plane.pipeline_runs r WHERE r.id = j.pipeline_run_id AND r.status = 'running')`,
 		projectID,
 	)
 	if err != nil {
@@ -141,6 +143,15 @@ type CancelledRun struct {
 // against a concurrent worker mark_running/mark_terminal) and updates by id,
 // all inside one transaction.
 func (d *DB) CancelActiveRuns(ctx context.Context, projectID string) ([]CancelledRun, error) {
+	return d.cancelActive(ctx, `project_id = $1::uuid`, projectID)
+}
+
+// CancelPipelineJobs cancels the queued or running jobs of one pipeline run.
+func (d *DB) CancelPipelineJobs(ctx context.Context, pipelineRunID string) ([]CancelledRun, error) {
+	return d.cancelActive(ctx, `pipeline_run_id = $1::uuid`, pipelineRunID)
+}
+
+func (d *DB) cancelActive(ctx context.Context, where, arg string) ([]CancelledRun, error) {
 	tx, err := d.pool.Begin(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("db: cancel active runs: begin: %w", err)
@@ -149,8 +160,8 @@ func (d *DB) CancelActiveRuns(ctx context.Context, projectID string) ([]Cancelle
 
 	rows, err := tx.Query(ctx,
 		`SELECT id::text, status FROM control_plane.job_runs
-		 WHERE project_id = $1::uuid AND status IN ('queued', 'running') FOR UPDATE`,
-		projectID,
+		 WHERE `+where+` AND status IN ('queued', 'running') FOR UPDATE`,
+		arg,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("db: cancel active runs: select active: %w", err)

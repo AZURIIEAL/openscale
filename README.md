@@ -72,7 +72,7 @@ docker compose down -v   # stop and delete every volume (Postgres, MinIO, Redis,
 
 A fresh stack starts with an empty lake, so Home, Dashboards and the SQL
 Editor have nothing to show yet. Open **Pipelines** and run the stages in
-order, or use **Run All**, which chains them:
+order, or run the **taxi** pipeline, which chains them (it asks for the month range first):
 
 | # | Stage | What it does | Needs |
 |---|---|---|---|
@@ -125,7 +125,8 @@ embedded real service, not mock data. The caveats are the real limits.
 | Screen | What's real | Limits |
 |---|---|---|
 | **Home** | Live container CPU/memory gauges, job history, Gold-backed revenue trend and stat cards | |
-| **Pipelines** | Triggers the real job queue end to end (control-plane → Redis → worker → Postgres), live status and logs over WebSocket, run forms generated from the job catalog, run-all chaining, Stop all (stops just the jobs' processes, not the worker), clear data | Run All is the fixed taxi chain; pipelines as data come in Phase 4d |
+| **Pipelines** | Triggers the real job queue end to end (control-plane → Redis → worker → Postgres), live status and logs over WebSocket, run forms generated from the job catalog, Stop all (stops just the jobs' processes, not the worker), clear data | |
+| **Pipelines as data** | Save a chain of jobs (each step a catalog job with its params) per project; Run hands it to the control-plane's orchestrator, which queues each step after the previous one succeeds and keeps its state in Postgres, so it survives a control-plane restart. Stop cancels the run and its current job | Steps run in a straight line (no branches); only the first step's params can change per run; no schedules yet |
 | **SQL Editor** | Read-only `SELECT`/`WITH` against Postgres (Gold tables, feature table, job history) inside a read-only transaction, schema browser, query history | Postgres only; Bronze/Silver Parquet in the lake isn't queryable yet |
 | **Data Catalog** | Postgres schema browser (row counts and sample rows) and a live MinIO lake browser (object counts and sizes per layer) | Lineage is a static diagram of the five stages, not computed; no Parquet preview |
 | **Streaming** | `replay` streams real Silver trips onto Kafka; the control-plane tails the topic and pushes live trips and windowed aggregates over WebSocket. Pause, resume, cancel and ×1–×10 speed act on the running replay | One topic, `yellow-taxi-trips` |
@@ -141,7 +142,7 @@ embedded real service, not mock data. The caveats are the real limits.
 | **Quality rules** | Each dataset's Rules tab: SQL conditions that reject, quarantine, flag or just count rows, in priority order. Save checks every condition against the data; Test shows per rule how many rows match and would be removed. The `validate` job applies them, and the taxi Silver stage runs its ten rules the same way | |
 | **SQL over the lake** | The SQL Editor runs DuckDB over a project's datasets (each a view named after it) through the internal `query-engine` service, with the S3 secret scoped to the project, local files disabled and a per-query timeout | The taxi sample still queries Postgres |
 
-**Not built yet:** pipelines as data (Run All is still the taxi chain),
+**Not built yet:** branching pipelines and schedules,
 saved queries and dashboards for any project, scheduling, the assistant,
 and auth. See [`ideas/vision-and-roadmap.md`](ideas/vision-and-roadmap.md).
 

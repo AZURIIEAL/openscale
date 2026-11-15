@@ -87,6 +87,11 @@ Every route is registered in
 | GET | `/api/projects/{p}/datasets/{name}/profile` | Per-column stats (stored at ingest; `?refresh=1` recomputes) |
 | PUT | `/api/projects/{p}/datasets/{name}/rules` | Replace the quality rules, `{"rules": [{id, tier, when, note?, column?}]}`. Shape checked in `internal/datasets/rules.go`; for a ready dataset the query engine also checks each `when` binds. `400` names the bad rule |
 | POST | `/api/projects/{p}/datasets/{name}/rules/test` | Same body, saved or not: per-rule `hits` / `assigned` (removed) / `flagged` and the kept/rejected/quarantined totals over the whole dataset. Nothing is written; a bad rule is `200 {error}` |
+| GET / POST | `/api/projects/{p}/pipelines` | List / create a pipeline: `{name, description, steps: [{jobType, params}]}`. Every step is checked against the job catalog and the project's features; 400 names the first bad step |
+| PUT / DELETE | `/api/projects/{p}/pipelines/{name}` | Replace description and steps / delete (its runs stay) |
+| POST | `/api/projects/{p}/pipelines/{name}/run` | Start a run, 202. Optional `{"params": {...}}` replaces the first step's params for this run. The orchestrator (`internal/api/orchestrator.go`) queues each step after the previous one succeeds (`partial` counts), stops on a failed or cancelled step, and reads all its state from Postgres |
+| GET | `/api/projects/{p}/pipeline-runs[/{id}]` | Latest 20 runs (`?limit=` up to 100) / one run, each with its step jobs `[{stepIndex, runId, status}]` |
+| POST | `/api/projects/{p}/pipeline-runs/{id}/cancel` | Stop the run and cancel its current job. `jobs/cancel-all` stops running pipelines too |
 | POST | `/api/projects/{p}/query` | Read-only SQL over the project's datasets (DuckDB query engine; each dataset is a view named after it). Same body/response contract as `/api/query` |
 | GET | `/api/projects/{p}/query/catalog` | The project's ready datasets as `{schema:"main", table, columns}` |
 | POST | `/api/query` | Run a read-only `SELECT`/`WITH` (read-only transaction, row-capped). Not yet project-scoped |

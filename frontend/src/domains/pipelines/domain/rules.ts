@@ -1,5 +1,5 @@
 import type { Status } from '@/shared/types/status';
-import type { JobDefinition, JobState, ParamSpec, ParamValues } from './entities';
+import type { JobDefinition, JobState, ParamSpec, ParamValues, PipelineRun } from './entities';
 
 /**
  * Frontend mirror of the Go control-plane's jobs.DisplayStatus -- maps a
@@ -161,4 +161,30 @@ export function paramErrors(schema: ParamSpec[], values: ParamValues): Record<st
     if (before) errors[p.name] = `Must be on or after ${labels.get(p.gte) ?? p.gte}`;
   }
   return errors;
+}
+
+/** The form values that reproduce saved params (the inverse of
+ * paramsFromValues): an edit form opens on what was saved, not the defaults. */
+export function valuesFromParams(schema: ParamSpec[], params: Record<string, unknown>): ParamValues {
+  const values = initialParamValues(schema);
+  for (const p of schema) {
+    const v = params[p.name];
+    if (v === undefined || v === null) continue;
+    values[p.name] = p.type === 'columns' ? (Array.isArray(v) ? v.map(String) : []) : String(v);
+  }
+  return values;
+}
+
+/** One line for a step's params, e.g. "start 2025-01 · end 2025-03". */
+export function describeParams(params: Record<string, unknown>): string {
+  const parts = Object.entries(params).map(([k, v]) => `${k} ${Array.isArray(v) ? v.join(', ') : String(v)}`);
+  return parts.length ? parts.join(' · ') : 'no params';
+}
+
+/** Where step i of a pipeline run stands: its job's state once queued;
+ * before that `pending` while the run goes on, `skipped` once it ended. */
+export function pipelineStepState(run: PipelineRun, i: number): JobState | 'pending' | 'skipped' {
+  const job = run.jobs.find((j) => j.stepIndex === i);
+  if (job) return job.status;
+  return run.status === 'running' ? 'pending' : 'skipped';
 }

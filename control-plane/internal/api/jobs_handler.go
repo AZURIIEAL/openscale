@@ -161,30 +161,46 @@ func (h *JobsHandler) CancelAll(w http.ResponseWriter, r *http.Request) {
 	defer cancel()
 
 	project, _ := ProjectFromContext(r.Context())
+	// Pipelines first, so the orchestrator doesn't queue a next step for a
+	// job cancelled below.
+	if err := h.db.CancelRunningPipelineRuns(ctx, project.ID); err != nil {
+		writeJobErr(w, err)
+		return
+	}
 	cancelled, err := h.db.CancelActiveRuns(ctx, project.ID)
 	if err != nil {
 		writeJobErr(w, err)
+		return
+	}
+	if err := signalCancelled(ctx, h.redis, cancelled); err != nil {
+		http.Error(w, "cancelled in the database, but could not signal the worker: "+err.Error(), http.StatusBadGateway)
 		return
 	}
 
 	runs := make([]jobs.Run, 0, len(cancelled))
 	for _, c := range cancelled {
 		runs = append(runs, c.Run)
+	}
+	writeJSON(w, http.StatusOK, CancelAllResponse{Cancelled: runs})
+}
+
+// signalCancelled tells the worker to stop each cancelled run that was
+// already running, and every live-log socket that the run ended.
+func signalCancelled(ctx context.Context, redisClient *redis.Client, cancelled []db.CancelledRun) error {
+	for _, c := range cancelled {
 		if c.WasRunning {
-			if err := h.redis.SetJobControlField(ctx, c.Run.ID, "cancelled", "true"); err != nil {
-				http.Error(w, "cancelled in the database, but could not signal the worker: "+err.Error(), http.StatusBadGateway)
-				return
+			if err := redisClient.SetJobControlField(ctx, c.Run.ID, "cancelled", "true"); err != nil {
+				return err
 			}
 		}
-		_ = h.redis.PublishJobEvent(ctx, redis.JobEvent{
+		_ = redisClient.PublishJobEvent(ctx, redis.JobEvent{
 			JobID:  c.Run.ID,
 			Type:   "status",
 			Status: string(jobs.StatusCancelled),
 			At:     time.Now().UTC().Format(time.RFC3339),
 		})
 	}
-
-	writeJSON(w, http.StatusOK, CancelAllResponse{Cancelled: runs})
+	return nil
 }
 
 // controlRequest is the body of POST /api/jobs/{id}/control.

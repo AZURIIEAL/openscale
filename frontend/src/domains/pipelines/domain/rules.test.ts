@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
+  describeParams,
+  pipelineStepState,
+  valuesFromParams,
   deriveRunStatus,
   formatRunDuration,
   formatRunRows,
@@ -9,7 +12,7 @@ import {
   paramsFromValues,
   stateLabel,
 } from './rules';
-import type { JobDefinition, JobState, ParamSpec } from './entities';
+import type { JobDefinition, JobState, ParamSpec, PipelineRun } from './entities';
 
 const ALL_STATES: JobState[] = ['queued', 'running', 'succeeded', 'partial', 'failed', 'cancelled'];
 
@@ -174,3 +177,47 @@ describe('paramErrors', () => {
   });
 });
 
+
+describe('valuesFromParams', () => {
+  const schema: ParamSpec[] = [
+    { name: 'start', type: 'month', label: 'Start', required: true },
+    { name: 'limit', type: 'integer', label: 'Limit', default: 5 },
+    { name: 'dry', type: 'boolean', label: 'Dry run' },
+    { name: 'cols', type: 'columns', label: 'Columns', of: 'dataset' },
+  ];
+  it('round-trips saved params through the form', () => {
+    const params = { start: '2025-03', limit: 10, dry: true, cols: ['a', 'b'] };
+    expect(paramsFromValues(schema, valuesFromParams(schema, params))).toEqual(params);
+  });
+  it('falls back to the defaults for missing params', () => {
+    expect(valuesFromParams(schema, {})).toEqual(initialParamValues(schema));
+  });
+});
+
+describe('describeParams', () => {
+  it('lists params or says there are none', () => {
+    expect(describeParams({ start: '2025-01', cols: ['a', 'b'] })).toBe('start 2025-01 · cols a, b');
+    expect(describeParams({})).toBe('no params');
+  });
+});
+
+describe('pipelineStepState', () => {
+  const run = (status: PipelineRun['status']): PipelineRun => ({
+    id: 'r',
+    projectId: 'p',
+    pipelineName: 'x',
+    steps: [
+      { jobType: 'a', params: {} },
+      { jobType: 'b', params: {} },
+    ],
+    status,
+    currentStep: 0,
+    submittedAt: '',
+    jobs: [{ stepIndex: 0, runId: 'j', status: 'failed' }],
+  });
+  it('uses the job state, else pending or skipped', () => {
+    expect(pipelineStepState(run('running'), 0)).toBe('failed');
+    expect(pipelineStepState(run('running'), 1)).toBe('pending');
+    expect(pipelineStepState(run('failed'), 1)).toBe('skipped');
+  });
+});

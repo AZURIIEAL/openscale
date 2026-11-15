@@ -1,17 +1,16 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import { Panel } from '@/shared/design-system/Panel';
 import { Well } from '@/shared/design-system/Well';
 import { RunButton } from '@/shared/design-system/RunButton';
 import { Spinner } from '@/shared/design-system/Spinner';
-import { StatusPill } from '@/shared/design-system/StatusPill';
 import { FEATURE_LEGACY_TAXI, hasFeature, useCurrentProject } from '@/shared/project';
 import { listedJobs } from '../domain/rules';
 import { useCancelAllRuns, useClearRuns, useJobRunsPage } from '../application/useJobRuns';
 import { useJobCatalog } from '../application/useJobCatalog';
 import { useTriggerJob } from '../application/useTriggerJob';
-import { useRunAllJobs, PIPELINE_ORDER } from '../application/useRunAllJobs';
 import { RunJobForm } from './RunJobForm';
+import { PipelinesPanel } from './PipelinesPanel';
 import { JobRunsTable } from './JobRunsTable';
 import { JobRunLogPanel } from './JobRunLogPanel';
 import { ClearDataButton } from './ClearDataButton';
@@ -35,11 +34,8 @@ export function PipelinesScreen() {
   const { project } = useCurrentProject();
   const catalogQuery = useJobCatalog();
   const jobs = listedJobs(catalogQuery.data ?? [], (feature) => hasFeature(project, feature));
-  // Run All and Clear data drive the fixed taxi chain; Phase 4d replaces
-  // them with pipelines any project can define.
+  // Clear data wipes the taxi lake; Phase 4e removes it with the taxi code.
   const taxi = hasFeature(project, FEATURE_LEGACY_TAXI);
-  // Run All's date-range prompt is ingest's own form.
-  const ingestSchema = catalogQuery.data?.find((job) => job.type === 'ingest')?.paramsSchema ?? [];
   const [historyPage, setHistoryPage] = useState(0);
   // Always-page-0 query for "is any job currently running" (catalog
   // spinners, reselect-on-refresh) -- independent of whichever history page
@@ -51,13 +47,11 @@ export function PipelinesScreen() {
   const historyQuery = useJobRunsPage(historyPage);
   const clearRuns = useClearRuns();
   const cancelAllRuns = useCancelAllRuns();
-  const { mutate, mutateAsync, isPending } = useTriggerJob();
+  const { mutate, isPending } = useTriggerJob();
   const [openJobType, setOpenJobType] = useState<string | null>(navState?.openJobType ?? null);
-  const [runAllFormOpen, setRunAllFormOpen] = useState(false);
   const [selectedRunId, setSelectedRunId] = useState<string | null>(navState?.selectedRunId ?? null);
 
-  const runAll = useRunAllJobs(mutateAsync, setSelectedRunId);
-  const runAllActive = runAll.state.phase === 'running';
+  const selectRun = useCallback((id: string) => setSelectedRunId(id), []);
   const hasActiveRuns = runs?.some((run) => run.state === 'queued' || run.state === 'running') ?? false;
 
   // selectedRunId is component state, so a page refresh loses it -- if a
@@ -71,29 +65,17 @@ export function PipelinesScreen() {
 
   return (
     <div className="flex flex-col gap-5">
+      <PipelinesPanel jobs={jobs} onSelectRun={selectRun} />
+
       <Panel>
         <header className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <h3 style={{ margin: 0, fontSize: 18, fontWeight: 700, letterSpacing: '-0.015em', color: 'var(--text-heading)' }}>Job Catalog</h3>
             <p style={{ margin: '6px 0 0', fontSize: 14, color: 'var(--text-muted)' }}>
-              {jobs.length} {jobs.length === 1 ? 'job' : 'jobs'}
-              {taxi ? ', run individually or as a chain' : ''}
+              {jobs.length} {jobs.length === 1 ? 'job' : 'jobs'}, each run on its own
             </p>
           </div>
           <div className="flex items-center gap-3">
-            {runAll.state.phase !== 'idle' && (
-              <span
-                className="os-font-mono flex items-center gap-2 text-[11px] uppercase tracking-[0.06em]"
-                style={{ color: runAll.state.phase === 'stopped' ? 'var(--danger)' : 'var(--text-muted)' }}
-              >
-                {runAllActive && <Spinner />}
-                {runAll.state.phase === 'running' &&
-                  `Step ${runAll.state.stepIndex + 1} of ${PIPELINE_ORDER.length} — ${PIPELINE_ORDER[runAll.state.stepIndex]}`}
-                {runAll.state.phase === 'stopped' &&
-                  `Stopped at step ${runAll.state.stepIndex + 1} of ${PIPELINE_ORDER.length} (${runAll.state.jobType} ${runAll.state.finalState})`}
-                {runAll.state.phase === 'done' && `All ${PIPELINE_ORDER.length} steps complete`}
-              </span>
-            )}
             {hasActiveRuns && (
               <button
                 type="button"
@@ -111,33 +93,8 @@ export function PipelinesScreen() {
                 {cancelAllRuns.isPending ? 'Stopping…' : 'Stop all'}
               </button>
             )}
-            {taxi && (
-              <RunButton
-                disabled={runAllActive || isPending}
-                onClick={() => {
-                  setOpenJobType(null);
-                  setRunAllFormOpen((open) => !open);
-                }}
-              >
-                {runAllFormOpen ? 'Cancel' : 'Run all'}
-              </RunButton>
-            )}
           </div>
         </header>
-
-        {runAllFormOpen && (
-          <Well className="mt-4 p-3">
-            <RunJobForm
-              schema={ingestSchema}
-              pending={runAllActive}
-              submitLabel="Run all"
-              onSubmit={(params) => {
-                setRunAllFormOpen(false);
-                runAll.runAll(params);
-              }}
-            />
-          </Well>
-        )}
 
         <div className="mt-4 flex flex-col gap-3">
           {catalogQuery.isError && (
@@ -159,22 +116,7 @@ export function PipelinesScreen() {
             const runningRun = runs?.find(
               (run) => run.jobType === job.type && (run.state === 'queued' || run.state === 'running'),
             );
-            const disabled = runAllActive || isPending;
-
-            // During Run All, every row other than the one currently in
-            // flight gets a static pill instead of the real per-run lookup
-            // above -- steps later in PIPELINE_ORDER haven't been triggered
-            // yet (so there's no run row for them to find), and steps earlier
-            // in it already went terminal (so runningRun no longer matches).
-            const stepIndex = runAllActive ? PIPELINE_ORDER.indexOf(job.type as (typeof PIPELINE_ORDER)[number]) : -1;
-            const runAllStepStatus =
-              stepIndex === -1 || runAll.state.phase !== 'running'
-                ? null
-                : stepIndex < runAll.state.stepIndex
-                  ? 'completed'
-                  : stepIndex > runAll.state.stepIndex
-                    ? 'queued'
-                    : null; // the in-flight step -- falls through to the runningRun spinner below
+            const disabled = isPending;
 
             return (
               <div key={job.type}>
@@ -203,11 +145,7 @@ export function PipelinesScreen() {
                     </p>
                   </div>
                   <div className="flex-none">
-                    {runAllStepStatus === 'completed' ? (
-                      <StatusPill status="good">Completed</StatusPill>
-                    ) : runAllStepStatus === 'queued' ? (
-                      <StatusPill status="warn">Queued</StatusPill>
-                    ) : runningRun ? (
+                    {runningRun ? (
                       <button
                         type="button"
                         className="os-font-mono flex flex-shrink-0 items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.06em]"
@@ -221,10 +159,7 @@ export function PipelinesScreen() {
                     ) : job.paramsSchema.length > 0 ? (
                       <RunButton
                         disabled={disabled}
-                        onClick={() => {
-                          setRunAllFormOpen(false);
-                          setOpenJobType(openJobType === job.type ? null : job.type);
-                        }}
+                        onClick={() => setOpenJobType(openJobType === job.type ? null : job.type)}
                       >
                         {openJobType === job.type ? 'Cancel' : 'Run'}
                       </RunButton>

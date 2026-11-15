@@ -4,15 +4,17 @@ import { Toggle } from '@/shared/design-system/Toggle';
 import { useDatasets } from '@/domains/datasets/application/useDatasets';
 import type { Dataset } from '@/domains/datasets/domain/entities';
 import type { ParamSpec, ParamValues } from '../domain/entities';
-import { initialParamValues, paramErrors, paramsFromValues } from '../domain/rules';
+import { initialParamValues, paramErrors, paramsFromValues, valuesFromParams } from '../domain/rules';
 
 interface RunJobFormProps {
   /** The job's params schema from the catalog; the form renders one field per entry. */
   schema: ParamSpec[];
   pending: boolean;
   onSubmit: (params: Record<string, unknown>) => void;
-  /** Reused for Run All's date-range prompt, which needs its own label. */
+  /** Reused by pipelines (run prompt, step editor), which need their own label. */
   submitLabel?: string;
+  /** Params to start from instead of the schema's defaults. */
+  initial?: Record<string, unknown>;
 }
 
 const inputClass = 'os-well os-font-mono rounded-lg px-2.5 py-2 text-[13px]';
@@ -251,8 +253,8 @@ function ParamInput({ spec, value: rawValue, values, choices, onChange }: ParamI
  * (domain/rules.ts's paramErrors), so the button stays disabled until the
  * run would be accepted.
  */
-export function RunJobForm({ schema, pending, onSubmit, submitLabel = 'Start run' }: RunJobFormProps) {
-  const [values, setValues] = useState<ParamValues>(() => initialParamValues(schema));
+export function RunJobForm({ schema, pending, onSubmit, submitLabel = 'Start run', initial }: RunJobFormProps) {
+  const [values, setValues] = useState<ParamValues>(() => (initial ? valuesFromParams(schema, initial) : initialParamValues(schema)));
   const errors = useMemo(() => paramErrors(schema, values), [schema, values]);
   const usesDatasets = schema.some((p) => p.type === 'dataset');
   const datasetsQuery = useDatasets();
