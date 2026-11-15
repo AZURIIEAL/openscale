@@ -57,7 +57,7 @@ func NewRouter(
 	actionHandler := NewContainerActionHandler(watcher)
 	statsHandler := NewStatsHandler(watcher)
 	projectsHandler := NewProjectsHandler(database)
-	jobsHandler := NewJobsHandler(database, redisClient, watcher)
+	jobsHandler := NewJobsHandler(database, redisClient)
 	dashboardsHandler := NewDashboardsHandler(database)
 	appearanceHandler := NewAppearanceHandler(database)
 	queryHandler := NewQueryHandler(database)
@@ -76,6 +76,9 @@ func NewRouter(
 
 		r.Get("/appearance-settings", appearanceHandler.Get)
 		r.Put("/appearance-settings", appearanceHandler.Update)
+
+		// The job catalog the worker publishes; the same for every project.
+		r.Get("/jobs/catalog", jobsHandler.Catalog)
 
 		// Not yet project-scoped: the Postgres SQL editor (kept for the taxi
 		// sample's Gold tables), the fixed-prefix lake browser and the single

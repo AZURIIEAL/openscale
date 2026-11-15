@@ -16,66 +16,43 @@ export interface JobRun {
   rowsProcessed?: number;
 }
 
-export interface JobParamField {
+/** Field kinds a job's params schema may use -- mirrors PARAM_TYPES in
+ * worker/registry.py. `dataset` is the name of a dataset in the project. */
+export type ParamType = 'string' | 'number' | 'integer' | 'boolean' | 'enum' | 'date' | 'month' | 'dataset';
+
+/** One field of a job's params schema, as the worker publishes it
+ * (worker/registry.py's Param; control-plane jobs.ParamSpec). `min`/`max`
+ * are numbers for number/integer fields and ISO strings for date/month
+ * fields; `gte` names an earlier field this one must not be before. */
+export interface ParamSpec {
   name: string;
+  type: ParamType;
   label: string;
-  placeholder: string;
+  description?: string;
+  required?: boolean;
+  default?: unknown;
+  options?: string[];
+  min?: number | string;
+  max?: number | string;
+  gte?: string;
 }
 
+/** One job type from GET /api/jobs/catalog. The worker publishes the
+ * catalog from its @job registry, so adding a job type needs no change
+ * here. */
 export interface JobDefinition {
   type: string;
   label: string;
-  /** The pipeline layer this job writes to (Bronze/Silver/Gold/Features/Model) --
-   * shown as a small badge next to the label. */
-  stage: string;
   description: string;
-  /** Present only for job types that need user-supplied parameters before
-   * running (currently just ingest's date range). Absent means the job
-   * runs immediately on click with no configuration step -- it processes
-   * whatever is currently available upstream (all of Bronze, all of
-   * Silver, etc). */
-  paramFields?: JobParamField[];
+  /** Optional badge next to the label (Bronze, Silver, ... Model). */
+  stage?: string;
+  /** False for jobs another screen queues (replay, reset, dataset jobs);
+   * they stay out of the Pipelines run list. */
+  listed: boolean;
+  paramsSchema: ParamSpec[];
 }
 
-/** Job catalog -- hardcoded here, mirroring system-health's
- * mockSystemHealthGateway/watchedServices precedent, since this is
- * deliberately Phase 2 scope ("control the existing pipeline"), not a
- * generic job-registration system. All five stages are real and
- * triggerable -- ingest through train, mirroring the full Bronze -> Silver
- * -> Gold -> Features -> Train pipeline. */
-export const JOB_CATALOG: JobDefinition[] = [
-  {
-    type: 'ingest',
-    label: 'Ingest (Bronze)',
-    stage: 'Bronze',
-    description: 'Download/validate TLC parquet for a month range, write to Bronze in MinIO.',
-    paramFields: [
-      { name: 'start', label: 'Start (YYYY-MM)', placeholder: '2024-07' },
-      { name: 'end', label: 'End (YYYY-MM)', placeholder: '2024-12' },
-    ],
-  },
-  {
-    type: 'silver',
-    label: 'Validate (Silver)',
-    stage: 'Silver',
-    description: 'Bronze -> Silver: reject/quarantine/flag invalid rows, write clean trips.',
-  },
-  {
-    type: 'gold',
-    label: 'Aggregate (Gold)',
-    stage: 'Gold',
-    description: 'Silver -> Gold: daily revenue, hourly demand, zone stats, congestion metrics.',
-  },
-  {
-    type: 'features',
-    label: 'Compute Features',
-    stage: 'Features',
-    description: 'Silver -> zone x hour features, written to Postgres and Redis.',
-  },
-  {
-    type: 'train',
-    label: 'Train Fare Model',
-    stage: 'Model',
-    description: 'Samples Silver trips, trains a fare-prediction model, logs it to MLflow.',
-  },
-];
+/** Raw form state: every field is edited as a string (checkboxes as
+ * 'true'/'false'), and paramsFromValues() turns it into the typed body
+ * the run endpoint validates. */
+export type ParamValues = Record<string, string>;

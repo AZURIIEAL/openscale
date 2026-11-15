@@ -1,8 +1,9 @@
 import { Panel } from '@/shared/design-system/Panel';
 import { Well } from '@/shared/design-system/Well';
 import { StatusPill } from '@/shared/design-system/StatusPill';
-import { JOB_CATALOG } from '@/domains/pipelines/domain/entities';
 import { useJobRunsPage } from '@/domains/pipelines/application/useJobRuns';
+import { useJobCatalog } from '@/domains/pipelines/application/useJobCatalog';
+import { listedJobs } from '@/domains/pipelines/domain/rules';
 import type { JobRun, JobState } from '@/domains/pipelines/domain/entities';
 
 const RUN_STATUS_MAP: Record<JobState, { status: 'good' | 'warn' | 'crit'; label: string }> = {
@@ -25,10 +26,10 @@ function latestRunFor(runs: JobRun[] | undefined, jobType: string): JobRun | und
 }
 
 /**
- * Static, honest 5-stage flow diagram -- reuses pipelines/domain/entities
- * .ts's JOB_CATALOG directly (Bronze/Ingest -> Silver -> Gold -> Features,
- * with Train as a fifth downstream stage) rather than a second hardcoded
- * copy that could drift, and rather than any computed/discovered lineage:
+ * Static, honest stage flow diagram -- the listed jobs of the job catalog
+ * the worker publishes, in catalog order (Bronze/Ingest -> Silver -> Gold
+ * -> Features -> Train for the taxi sample), the same list the Pipelines
+ * screen shows, rather than any computed/discovered lineage:
  * this app doesn't track column-level or table-level lineage anywhere, so
  * inventing one here would be exactly the kind of fabricated relationship
  * this feature is meant to avoid. The optional "last run" badge is a real
@@ -38,6 +39,7 @@ function latestRunFor(runs: JobRun[] | undefined, jobType: string): JobRun | und
 export function PipelineLineage() {
   const { data } = useJobRunsPage(0);
   const runs = data?.runs;
+  const stages = listedJobs(useJobCatalog().data ?? []);
 
   return (
     <Panel className="flex flex-col gap-3 p-4">
@@ -50,25 +52,27 @@ export function PipelineLineage() {
         </p>
       </div>
       <div className="flex flex-col gap-0">
-        {JOB_CATALOG.map((job, i) => {
+        {stages.map((job, i) => {
           const latestRun = latestRunFor(runs, job.type);
           const badge = latestRun ? RUN_STATUS_MAP[latestRun.state] : null;
           return (
             <div key={job.type} className="flex flex-col">
               <Well className="flex flex-wrap items-center gap-4 px-4 py-3">
-                <span
-                  className="os-font-mono flex-shrink-0"
-                  style={{
-                    fontSize: 11,
-                    color: 'var(--text-subtle)',
-                    background: 'var(--surface-card)',
-                    border: '1px solid var(--border-subtle)',
-                    borderRadius: 999,
-                    padding: '3px 8px',
-                  }}
-                >
-                  {job.stage}
-                </span>
+                {job.stage && (
+                  <span
+                    className="os-font-mono flex-shrink-0"
+                    style={{
+                      fontSize: 11,
+                      color: 'var(--text-subtle)',
+                      background: 'var(--surface-card)',
+                      border: '1px solid var(--border-subtle)',
+                      borderRadius: 999,
+                      padding: '3px 8px',
+                    }}
+                  >
+                    {job.stage}
+                  </span>
+                )}
                 <div className="min-w-0 flex-1">
                   <div style={{ fontSize: 14, fontWeight: 700, letterSpacing: '-0.01em', color: 'var(--text-body)' }}>{job.label}</div>
                   <p className="text-wrap-pretty" style={{ margin: '4px 0 0', fontSize: 12.5, color: 'var(--text-muted)' }}>
@@ -81,7 +85,7 @@ export function PipelineLineage() {
                   </div>
                 )}
               </Well>
-              {i < JOB_CATALOG.length - 1 && (
+              {i < stages.length - 1 && (
                 <div className="flex justify-center py-0.5" aria-hidden="true">
                   <span className="os-font-mono" style={{ fontSize: 12, color: 'var(--text-subtle)' }}>
                     ↓

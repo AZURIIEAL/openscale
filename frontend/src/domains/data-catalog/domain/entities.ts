@@ -38,7 +38,6 @@ export interface LakeCatalog {
 }
 
 // The static pipeline lineage diagram (Part 3) deliberately has no entity
-// of its own here -- it reuses pipelines/domain/entities.ts's JOB_CATALOG
-// directly (ui/PipelineLineage.tsx), the same real, hardcoded Bronze ->
-// Silver -> Gold -> Features -> Train order and descriptions the Pipelines
-// screen already shows, rather than a second copy that could drift.
+// of its own here -- it reads the job catalog the worker publishes
+// (ui/PipelineLineage.tsx), the same listed jobs, order and descriptions the
+// Pipelines screen shows, rather than a second copy that could drift.

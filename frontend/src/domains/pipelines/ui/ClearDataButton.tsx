@@ -10,8 +10,8 @@ interface ClearDataButtonProps {
 /**
  * Wipes everything earlier pipeline stages produced -- Gold/feature tables
  * in Postgres, the online feature snapshot in Redis, and the Bronze/Silver/
- * Gold objects in MinIO -- by triggering the 'reset' job type. That type is
- * deliberately absent from JOB_CATALOG so it never appears as a normal
+ * Gold objects in MinIO -- by triggering the 'reset' job type. The worker
+ * registers that type with listed=False so it never appears as a normal
  * pipeline stage; this is its only entry point. Same arm-then-confirm
  * interaction as JobRunsTable's ClearHistoryButton (click once to arm,
  * click again within a few seconds to confirm) since this is destructive

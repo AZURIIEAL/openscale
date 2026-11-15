@@ -6,9 +6,8 @@ clean slate. Triggered only from the Pipelines screen's dedicated "Clear
 Data" control, not listed as a normal pipeline stage.
 """
 
-from typing import Callable
-
 from common.db import get_postgres_connection, get_redis_client
+from registry import JobContext, job
 from spark.common.storage import delete_prefix
 
 POSTGRES_TABLES = [
@@ -60,29 +59,17 @@ def delete_online_features() -> str:
     return f"redis: deleted {deleted} online feature keys"
 
 
-def run(
-    params: dict, on_log_line: Callable[[str], None]
-) -> tuple[str, str | None, list[str], int | None, dict | None]:
-    """Runs the reset job. Returns (status, error, log_lines, rows_processed, metrics).
-    rows_processed/metrics are always None -- this isn't a row-count-shaped
-    job, matching gold.py's convention."""
-    log_lines: list[str] = []
+@job(
+    "reset",
+    "Clear Data",
+    "Wipe Bronze/Silver/Gold objects in MinIO and Gold/feature tables in Postgres.",
+    listed=False,
+)
+def reset(ctx: JobContext) -> None:
+    ctx.log(truncate_postgres_tables())
 
-    def log(line: str) -> None:
-        log_lines.append(line)
-        on_log_line(line)
+    for prefix in LAKE_PREFIXES:
+        deleted = delete_prefix(prefix)
+        ctx.log(f"minio: deleted {deleted} objects under {prefix}/")
 
-    try:
-        log(truncate_postgres_tables())
-
-        for prefix in LAKE_PREFIXES:
-            deleted = delete_prefix(prefix)
-            log(f"minio: deleted {deleted} objects under {prefix}/")
-
-        log(delete_online_features())
-    except Exception as exc:
-        error = f"{type(exc).__name__}: {exc}"
-        log(error)
-        return "failed", error, log_lines, None, None
-
-    return "succeeded", None, log_lines, None, None
+    ctx.log(delete_online_features())

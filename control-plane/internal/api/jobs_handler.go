@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"strconv"
@@ -11,51 +12,76 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/AZURIIEAL/openscale/control-plane/internal/db"
-	"github.com/AZURIIEAL/openscale/control-plane/internal/docker"
 	"github.com/AZURIIEAL/openscale/control-plane/internal/jobs"
 	"github.com/AZURIIEAL/openscale/control-plane/internal/redis"
 )
 
-// workerContainerName is the single worker container that consumes the
-// Redis job-request stream one message at a time -- restarting it is the
-// only way to hard-stop a job that's actively running (see CancelAll).
-const workerContainerName = "openscale-worker"
+// maxParamsBytes caps a run request body; params are a handful of fields.
+const maxParamsBytes = 64 << 10
 
-// JobsHandler serves the job-trigger and job-history endpoints -- the
-// read/write surface backing the frontend's Pipelines domain.
+// JobsHandler serves the job catalog and the job-trigger and job-history
+// endpoints -- the read/write surface backing the frontend's Pipelines domain.
 type JobsHandler struct {
 	db         *db.DB
 	redis      *redis.Client
-	watcher    *docker.Watcher
 	dispatcher *Dispatcher
 }
 
-func NewJobsHandler(database *db.DB, redisClient *redis.Client, watcher *docker.Watcher) *JobsHandler {
-	return &JobsHandler{db: database, redis: redisClient, watcher: watcher, dispatcher: NewDispatcher(database, redisClient)}
+func NewJobsHandler(database *db.DB, redisClient *redis.Client) *JobsHandler {
+	return &JobsHandler{db: database, redis: redisClient, dispatcher: NewDispatcher(database, redisClient)}
 }
 
-// Run handles POST /api/projects/{projectId}/jobs/{type}/run. See
-// Dispatcher for the insert-then-enqueue contract.
+// Catalog handles GET /api/jobs/catalog: every job type the worker
+// publishes, with the params schema the frontend renders run forms from.
+func (h *JobsHandler) Catalog(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+	defer cancel()
+
+	defs, err := h.db.ListJobDefinitions(ctx)
+	if err != nil {
+		writeJobErr(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, defs)
+}
+
+// Run handles POST /api/projects/{projectId}/jobs/{type}/run. The type must
+// be published in the job catalog and the body must satisfy its params
+// schema; see Dispatcher for the insert-then-enqueue contract.
 func (h *JobsHandler) Run(w http.ResponseWriter, r *http.Request) {
 	project, _ := ProjectFromContext(r.Context())
 	jobType := chi.URLParam(r, "type")
-	if !jobs.IsKnownJobType(jobType) {
-		http.Error(w, "unknown job type", http.StatusNotFound)
-		return
-	}
 
-	params, err := io.ReadAll(r.Body)
+	body, err := io.ReadAll(io.LimitReader(r.Body, maxParamsBytes+1))
 	if err != nil {
 		http.Error(w, "failed to read request body", http.StatusBadRequest)
+		return
+	}
+	if len(body) > maxParamsBytes {
+		http.Error(w, "params body too large", http.StatusRequestEntityTooLarge)
 		return
 	}
 
 	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 	defer cancel()
 
-	run, err := h.dispatcher.Dispatch(ctx, project.ID, jobType, params)
+	def, err := h.db.GetJobDefinition(ctx, jobType)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeJobErr(w, err)
+		return
+	}
+	params, err := jobs.ParseParams(body)
+	if err == nil {
+		err = def.ValidateParams(params)
+	}
+	if err != nil {
+		writeJobErr(w, err)
+		return
+	}
+
+	run, err := h.dispatcher.Dispatch(ctx, project.ID, jobType, body)
+	if err != nil {
+		writeJobErr(w, err)
 		return
 	}
 
@@ -120,32 +146,32 @@ type CancelAllResponse struct {
 	Cancelled []jobs.Run `json:"cancelled"`
 }
 
-// CancelAll handles POST /api/projects/{projectId}/jobs/cancel-all. Queued runs are cooperatively
-// cancelled (the worker checks each run's status before executing it and
-// skips ones already marked cancelled, see worker/db.py's mark_running).
-// A running run has no such interrupt point -- the worker runs a single
-// synchronous Spark call per job with nothing polling for a cancel signal --
-// so the only way to actually stop it is to restart the worker container,
-// same Docker action the Infrastructure screen already exposes per-service.
-// Only this project's runs are cancelled, so the restart happens only when
-// the job currently occupying the worker belongs to this project.
+// CancelAll handles POST /api/projects/{projectId}/jobs/cancel-all. Every
+// queued or running run of the project is marked cancelled at once. Queued
+// runs are skipped by the worker when it reaches them (worker/db.py's
+// mark_running). Each running run gets its Redis control flag set: the
+// worker runs every job in its own child process and stops that process on
+// the flag (worker/runner.py), so only those jobs end -- the worker
+// container and other projects' runs carry on.
 func (h *JobsHandler) CancelAll(w http.ResponseWriter, r *http.Request) {
-	ctx, cancel := context.WithTimeout(r.Context(), 20*time.Second)
+	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
 	defer cancel()
 
 	project, _ := ProjectFromContext(r.Context())
 	cancelled, err := h.db.CancelActiveRuns(ctx, project.ID)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeJobErr(w, err)
 		return
 	}
 
 	runs := make([]jobs.Run, 0, len(cancelled))
-	hadRunning := false
 	for _, c := range cancelled {
 		runs = append(runs, c.Run)
 		if c.WasRunning {
-			hadRunning = true
+			if err := h.redis.SetJobControlField(ctx, c.Run.ID, "cancelled", "true"); err != nil {
+				http.Error(w, "cancelled in the database, but could not signal the worker: "+err.Error(), http.StatusBadGateway)
+				return
+			}
 		}
 		_ = h.redis.PublishJobEvent(ctx, redis.JobEvent{
 			JobID:  c.Run.ID,
@@ -155,15 +181,7 @@ func (h *JobsHandler) CancelAll(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
-	if hadRunning {
-		if err := h.watcher.Restart(ctx, workerContainerName); err != nil {
-			http.Error(w, "cancelled in the database, but failed to restart the worker: "+err.Error(), http.StatusBadGateway)
-			return
-		}
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(CancelAllResponse{Cancelled: runs})
+	writeJSON(w, http.StatusOK, CancelAllResponse{Cancelled: runs})
 }
 
 // controlRequest is the body of POST /api/jobs/{id}/control.
@@ -178,8 +196,10 @@ type controlRequest struct {
 var validSpeedMultipliers = map[float64]bool{1: true, 2: true, 3: true, 5: true, 10: true}
 
 // Control handles POST /api/projects/{projectId}/jobs/{id}/control -- a live command into a
-// running job's Redis control hash (openscale:jobs:{id}:control), currently
-// only meaningful to the `replay` job's send loop (worker/jobs/replay.py).
+// running job's Redis control hash (openscale:jobs:{id}:control). `cancel`
+// works for every job (the worker's runner stops the job's process);
+// pause, resume and setSpeed are only read by the `replay` job's send loop
+// (worker/jobs/replay.py).
 // This deliberately doesn't check the run's current DB status first: the
 // same "fire and let the worker notice, or no-op if nobody's listening"
 // tolerance for staleness this feature already has elsewhere (a command
@@ -223,4 +243,16 @@ func (h *JobsHandler) Control(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]bool{"ok": true})
+}
+
+// writeJobErr maps the job domain's errors to HTTP statuses.
+func writeJobErr(w http.ResponseWriter, err error) {
+	switch {
+	case errors.Is(err, jobs.ErrInvalidParams):
+		http.Error(w, err.Error(), http.StatusBadRequest)
+	case errors.Is(err, db.ErrNotFound):
+		http.Error(w, "unknown job type", http.StatusNotFound)
+	default:
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
 }

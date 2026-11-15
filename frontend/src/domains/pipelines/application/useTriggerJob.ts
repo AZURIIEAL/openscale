@@ -10,7 +10,7 @@ export function useTriggerJob() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ jobType, params }: { jobType: string; params: Record<string, string> }) =>
+    mutationFn: ({ jobType, params }: { jobType: string; params: Record<string, unknown> }) =>
       gateway.triggerRun(slug, jobType, params),
     onSettled: () => {
       // The runs table polls every 10s; invalidating makes the new queued
