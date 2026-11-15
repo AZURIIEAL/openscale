@@ -129,7 +129,7 @@
             "output": "daily_revenue",
             "layer": "gold",
             "engine": "duckdb",
-            "sql": "SELECT CAST(tpep_pickup_datetime AS DATE) AS pickup_date, COUNT(*) AS trip_count, SUM(total_amount) AS total_revenue, SUM(fare_amount) AS total_fare, SUM(tip_amount) AS total_tips, AVG(fare_amount) AS avg_fare FROM trips_clean WHERE NOT flag_pickup_year_mismatch GROUP BY 1 ORDER BY 1"
+            "sql": "SELECT CAST(tpep_pickup_datetime AS DATE) AS pickup_date, COUNT(*) AS trip_count, SUM(total_amount) AS total_revenue, SUM(fare_amount) AS total_fare, SUM(tip_amount) AS total_tips, AVG(fare_amount) AS avg_fare FROM trips_clean WHERE tpep_pickup_datetime >= DATE '2025-01-01' AND tpep_pickup_datetime < DATE '2025-02-01' GROUP BY 1 ORDER BY 1"
           }
         },
         {
@@ -138,7 +138,7 @@
             "output": "hourly_demand",
             "layer": "gold",
             "engine": "duckdb",
-            "sql": "SELECT hour(tpep_pickup_datetime) AS pickup_hour, COUNT(*) AS trip_count, AVG(fare_amount) AS avg_fare, AVG(trip_distance) AS avg_trip_distance, AVG(passenger_count) AS avg_passenger_count FROM trips_clean WHERE NOT flag_pickup_year_mismatch GROUP BY 1 ORDER BY 1"
+            "sql": "SELECT hour(tpep_pickup_datetime) AS pickup_hour, COUNT(*) AS trip_count, AVG(fare_amount) AS avg_fare, AVG(trip_distance) AS avg_trip_distance, AVG(passenger_count) AS avg_passenger_count FROM trips_clean WHERE tpep_pickup_datetime >= DATE '2025-01-01' AND tpep_pickup_datetime < DATE '2025-02-01' GROUP BY 1 ORDER BY 1"
           }
         },
         {
@@ -156,7 +156,7 @@
             "output": "congestion_metrics",
             "layer": "gold",
             "engine": "duckdb",
-            "sql": "SELECT CAST(tpep_pickup_datetime AS DATE) AS pickup_date, COUNT(*) AS trip_count, COUNT(*) FILTER (WHERE COALESCE(congestion_surcharge, 0) > 0) AS trips_with_congestion, SUM(congestion_surcharge) AS total_congestion_surcharge, 100.0 * COUNT(*) FILTER (WHERE COALESCE(congestion_surcharge, 0) > 0) / COUNT(*) AS congestion_trip_pct FROM trips_clean WHERE NOT flag_pickup_year_mismatch GROUP BY 1 ORDER BY 1"
+            "sql": "SELECT CAST(tpep_pickup_datetime AS DATE) AS pickup_date, COUNT(*) AS trip_count, COUNT(*) FILTER (WHERE COALESCE(congestion_surcharge, 0) > 0) AS trips_with_congestion, SUM(congestion_surcharge) AS total_congestion_surcharge, 100.0 * COUNT(*) FILTER (WHERE COALESCE(congestion_surcharge, 0) > 0) / COUNT(*) AS congestion_trip_pct FROM trips_clean WHERE tpep_pickup_datetime >= DATE '2025-01-01' AND tpep_pickup_datetime < DATE '2025-02-01' GROUP BY 1 ORDER BY 1"
           }
         },
         {
@@ -184,6 +184,78 @@
           }
         }
       ]
+    }
+  ],
+  "queries": [
+    {
+      "name": "total_revenue",
+      "sql": "SELECT SUM(total_revenue) AS revenue FROM daily_revenue",
+      "chart": {
+        "type": "number",
+        "y": "revenue"
+      }
+    },
+    {
+      "name": "total_trips",
+      "sql": "SELECT SUM(trip_count) AS trips FROM daily_revenue",
+      "chart": {
+        "type": "number",
+        "y": "trips"
+      }
+    },
+    {
+      "name": "daily_revenue_trend",
+      "sql": "SELECT strftime(pickup_date, '%b %d') AS day, total_revenue FROM daily_revenue ORDER BY pickup_date",
+      "chart": {
+        "type": "line",
+        "y": "total_revenue",
+        "x": "day"
+      }
+    },
+    {
+      "name": "daily_trip_volume",
+      "sql": "SELECT strftime(pickup_date, '%b %d') AS day, trip_count FROM daily_revenue ORDER BY pickup_date",
+      "chart": {
+        "type": "line",
+        "y": "trip_count",
+        "x": "day"
+      }
+    },
+    {
+      "name": "demand_by_hour",
+      "sql": "SELECT pickup_hour AS hour, trip_count FROM hourly_demand ORDER BY pickup_hour",
+      "chart": {
+        "type": "bar",
+        "y": "trip_count",
+        "x": "hour"
+      }
+    },
+    {
+      "name": "avg_fare_by_hour",
+      "sql": "SELECT pickup_hour AS hour, round(avg_fare, 2) AS avg_fare FROM hourly_demand ORDER BY pickup_hour",
+      "chart": {
+        "type": "bar",
+        "y": "avg_fare",
+        "x": "hour"
+      }
+    },
+    {
+      "name": "congestion_share",
+      "sql": "SELECT strftime(pickup_date, '%b %d') AS day, round(congestion_trip_pct, 1) AS pct FROM congestion_metrics ORDER BY pickup_date",
+      "chart": {
+        "type": "line",
+        "y": "pct",
+        "x": "day"
+      }
+    },
+    {
+      "name": "top_zones",
+      "sql": "SELECT coalesce(zone, 'Zone ' || PULocationID) AS zone, trip_count FROM zone_stats ORDER BY trip_count DESC LIMIT 10",
+      "chart": {
+        "type": "hbar",
+        "y": "trip_count",
+        "x": "zone"
+      }
     }
   ]
 }

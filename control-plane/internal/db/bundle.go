@@ -11,7 +11,7 @@ import (
 )
 
 // ImportProject creates a project with the bundle's datasets (pending, for
-// the caller to queue their fetch) and pipelines, all or nothing. A taken
+// the caller to queue their fetch), pipelines and saved queries, all or nothing. A taken
 // slug is ErrConflict.
 func (d *DB) ImportProject(ctx context.Context, b bundle.Bundle) (projects.Project, []datasets.Dataset, error) {
 	tx, err := d.pool.Begin(ctx)
@@ -50,6 +50,11 @@ func (d *DB) ImportProject(ctx context.Context, b bundle.Bundle) (projects.Proje
 			`INSERT INTO control_plane.pipelines (project_id, name, description, steps) VALUES ($1::uuid, $2, $3, $4::jsonb)`,
 			p.ID, pl.Name, pl.Description, steps); err != nil {
 			return p, nil, fmt.Errorf("db: import pipeline %s: %w", pl.Name, err)
+		}
+	}
+	for _, q := range b.Queries {
+		if _, err := saveQuery(ctx, tx, p.ID, q.Name, q.SQL, q.Chart); err != nil {
+			return p, nil, err
 		}
 	}
 	if err := tx.Commit(ctx); err != nil {

@@ -65,6 +65,7 @@ func NewRouter(
 	lakeHandler := NewLakeHandler(lakeClient)
 	dispatcher := NewDispatcher(database, redisClient)
 	projectsHandler := NewProjectsHandler(database, dispatcher)
+	savedQueriesHandler := NewSavedQueriesHandler(database)
 	pipelinesHandler := NewPipelinesHandler(database, redisClient, orchestrator)
 	datasetsHandler := NewDatasetsHandler(database, lakeClient, engine, dispatcher, maxUploadBytes)
 	projectQueryHandler := NewProjectQueryHandler(database, engine, maxQueryRows)
@@ -121,6 +122,10 @@ func NewRouter(
 			r.Get("/pipeline-runs", pipelinesHandler.ListRuns)
 			r.Get("/pipeline-runs/{id}", pipelinesHandler.GetRun)
 			r.Post("/pipeline-runs/{id}/cancel", pipelinesHandler.CancelRun)
+
+			r.Get("/saved-queries", savedQueriesHandler.List)
+			r.Put("/saved-queries/{name}", savedQueriesHandler.Put)
+			r.Delete("/saved-queries/{name}", savedQueriesHandler.Delete)
 
 			r.Get("/dashboards/overview", dashboardsHandler.Overview)
 			r.Get("/home/stats", dashboardsHandler.HomeStats)

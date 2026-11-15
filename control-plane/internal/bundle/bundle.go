@@ -1,5 +1,5 @@
 // Package bundle is the project file format: a project's definition
-// (URL datasets with their rules, and pipelines) as one JSON document that
+// (URL datasets with their rules, pipelines and saved queries) as one JSON document that
 // export writes and import reads. samples/nyc_taxi/project.json is one.
 // Pure like internal/projects; internal/db stores an imported bundle in one
 // transaction and internal/api serves both directions.
@@ -14,6 +14,7 @@ import (
 	"github.com/AZURIIEAL/openscale/control-plane/internal/datasets"
 	"github.com/AZURIIEAL/openscale/control-plane/internal/pipelines"
 	"github.com/AZURIIEAL/openscale/control-plane/internal/projects"
+	"github.com/AZURIIEAL/openscale/control-plane/internal/queries"
 )
 
 // Format names this version of the file; import refuses any other.
@@ -22,6 +23,7 @@ const Format = "openscale/project@1"
 const (
 	maxDatasets  = 100
 	maxPipelines = 100
+	maxQueries   = 200
 )
 
 // ErrInvalid wraps every reason a bundle is refused.
@@ -43,12 +45,20 @@ type Pipeline struct {
 	Steps       []pipelines.Step `json:"steps"`
 }
 
+// Query is a saved query; one with a chart is a dashboard tile.
+type Query struct {
+	Name  string         `json:"name"`
+	SQL   string         `json:"sql"`
+	Chart *queries.Chart `json:"chart,omitempty"`
+}
+
 // Bundle is the whole file.
 type Bundle struct {
 	Format    string               `json:"format"`
 	Project   projects.CreateInput `json:"project"`
 	Datasets  []Dataset            `json:"datasets"`
 	Pipelines []Pipeline           `json:"pipelines"`
+	Queries   []Query              `json:"queries,omitempty"`
 }
 
 func invalid(format string, args ...any) error {
@@ -74,8 +84,8 @@ func Parse(raw []byte) (Bundle, error) {
 		return b, invalid("project: %v", err)
 	}
 	b.Project = project
-	if len(b.Datasets) > maxDatasets || len(b.Pipelines) > maxPipelines {
-		return b, invalid("at most %d datasets and %d pipelines", maxDatasets, maxPipelines)
+	if len(b.Datasets) > maxDatasets || len(b.Pipelines) > maxPipelines || len(b.Queries) > maxQueries {
+		return b, invalid("at most %d datasets, %d pipelines and %d queries", maxDatasets, maxPipelines, maxQueries)
 	}
 
 	seen := map[string]bool{}
@@ -117,6 +127,18 @@ func Parse(raw []byte) (Bundle, error) {
 			return b, invalid("pipeline %s: %v", p.Name, err)
 		}
 	}
+
+	seen = map[string]bool{}
+	for i := range b.Queries {
+		q := &b.Queries[i]
+		if seen[q.Name] {
+			return b, invalid("query %s appears twice", q.Name)
+		}
+		seen[q.Name] = true
+		if q.SQL, q.Chart, err = queries.Normalize(q.Name, q.SQL, q.Chart); err != nil {
+			return b, invalid("query %q: %v", q.Name, err)
+		}
+	}
 	return b, nil
 }
 
@@ -126,7 +148,7 @@ func Parse(raw []byte) (Bundle, error) {
 //
 // shortcut: uploaded datasets and rules on derived datasets are left out;
 // add a lake archive (zip with the Parquet) when projects must move whole.
-func Export(p projects.Project, all []datasets.Dataset, pls []pipelines.Pipeline) (Bundle, error) {
+func Export(p projects.Project, all []datasets.Dataset, pls []pipelines.Pipeline, qs []queries.Query) (Bundle, error) {
 	b := Bundle{
 		Format:    Format,
 		Project:   projects.CreateInput{Slug: p.Slug, Name: p.Name, Description: p.Description},
@@ -145,6 +167,9 @@ func Export(p projects.Project, all []datasets.Dataset, pls []pipelines.Pipeline
 	}
 	for _, p := range pls {
 		b.Pipelines = append(b.Pipelines, Pipeline{Name: p.Name, Description: p.Description, Steps: p.Steps})
+	}
+	for _, q := range qs {
+		b.Queries = append(b.Queries, Query{Name: q.Name, SQL: q.SQL, Chart: q.Chart})
 	}
 	return b, nil
 }

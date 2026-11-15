@@ -48,6 +48,7 @@ internal/
   streaming/         The only kafka-go user: topic listing, trip consumer, windowed aggregates, WS hub
   datasets/          Dataset domain: name/URL rules, lake layout (pure, tested)
   bundle/            Project file format: parse/validate an import, build an export (pure, tested)
+  queries/           Saved queries and their chart spec (pure, tested)
   projects/          Project domain: type, slug rules, create/update validation (pure, tested)
   queryengine/       HTTP client for the DuckDB query service (query-engine/)
   sqlcheck/          Single-SELECT check for the SQL editor (pure, tested)
@@ -81,6 +82,8 @@ Every route is registered in
 | POST | `/api/projects/{p}/jobs/cancel-all` | Cancel the project's queued and running runs. Running jobs are stopped by the worker; the worker container keeps running |
 | POST | `/api/projects/{p}/jobs/{id}/control` | Live control: `{"action": "cancel"}` for any running job; `pause` \| `resume` \| `setSpeed` (`"speedMultiplier": 1\|2\|3\|5\|10`) for a running replay |
 | GET | `/api/ws/jobs/{id}` | WebSocket: live `status`/`log` events for one run (run ids are global, so this stays unscoped) |
+| GET | `/api/projects/{p}/saved-queries` | The project's saved queries; those with a `chart` are its dashboard tiles |
+| PUT / DELETE | `/api/projects/{p}/saved-queries/{name}` | Create or replace `{"sql", "chart"?: {"type": "line"\|"bar"\|"hbar"\|"number", "x"?, "y"}}` (`internal/queries`: one read-only statement, x required except for number) · delete |
 | GET | `/api/projects/{p}/dashboards/overview` | All Dashboards-screen chart data |
 | GET | `/api/projects/{p}/home/stats` | Home stat cards |
 | GET / POST | `/api/projects/{p}/datasets` | List datasets · create one: `multipart/form-data` (`name`?, `layer`?, `file`) streams the file to the lake and queues `dataset_ingest`; JSON `{"name"?, "layer"?, "url"}` queues `dataset_fetch` (download + ingest). Returns `202 {dataset, run}` |
