@@ -57,7 +57,6 @@ func NewRouter(
 	healthHandler := NewHealthHandler(watcher)
 	actionHandler := NewContainerActionHandler(watcher)
 	statsHandler := NewStatsHandler(watcher)
-	projectsHandler := NewProjectsHandler(database)
 	jobsHandler := NewJobsHandler(database, redisClient)
 	dashboardsHandler := NewDashboardsHandler(database)
 	appearanceHandler := NewAppearanceHandler(database)
@@ -65,6 +64,7 @@ func NewRouter(
 	streamingHandler := NewStreamingHandler(streamingClient, streamHub, frontendOrigin)
 	lakeHandler := NewLakeHandler(lakeClient)
 	dispatcher := NewDispatcher(database, redisClient)
+	projectsHandler := NewProjectsHandler(database, dispatcher)
 	pipelinesHandler := NewPipelinesHandler(database, redisClient, orchestrator)
 	datasetsHandler := NewDatasetsHandler(database, lakeClient, engine, dispatcher, maxUploadBytes)
 	projectQueryHandler := NewProjectQueryHandler(database, engine, maxQueryRows)
@@ -96,6 +96,7 @@ func NewRouter(
 
 		r.Get("/projects", projectsHandler.List)
 		r.Post("/projects", projectsHandler.Create)
+		r.Post("/projects/import", projectsHandler.Import)
 		r.Route("/projects/{projectId}", func(r chi.Router) {
 			// Resolves {projectId} (id or slug) once, 404s unknown ones, and
 			// puts the project in the request context for every route below.
@@ -104,6 +105,7 @@ func NewRouter(
 			r.Get("/", projectsHandler.Get)
 			r.Patch("/", projectsHandler.Update)
 			r.Delete("/", projectsHandler.Archive)
+			r.Get("/export", projectsHandler.Export)
 
 			r.Post("/jobs/{type}/run", jobsHandler.Run)
 			r.Get("/jobs/runs", jobsHandler.ListRuns)

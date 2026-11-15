@@ -59,14 +59,20 @@ func (h *PipelinesHandler) readPipeline(w http.ResponseWriter, r *http.Request) 
 
 func (h *PipelinesHandler) checkSteps(ctx context.Context, steps []pipelines.Step) error {
 	project, _ := ProjectFromContext(ctx)
+	return checkSteps(ctx, h.db, steps, project.HasFeature)
+}
+
+// checkSteps checks steps against the job catalog for a project with the
+// given features.
+func checkSteps(ctx context.Context, database *db.DB, steps []pipelines.Step, hasFeature func(string) bool) error {
 	lookup := func(jobType string) (jobs.Definition, error) {
-		def, err := h.db.GetJobDefinition(ctx, jobType)
+		def, err := database.GetJobDefinition(ctx, jobType)
 		if errors.Is(err, db.ErrNotFound) {
 			return def, fmt.Errorf("unknown job type")
 		}
 		return def, err
 	}
-	return pipelines.CheckSteps(steps, lookup, project.HasFeature)
+	return pipelines.CheckSteps(steps, lookup, hasFeature)
 }
 
 // List handles GET /api/projects/{p}/pipelines.

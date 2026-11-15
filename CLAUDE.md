@@ -13,7 +13,7 @@ session needs.
 | 1 Projects (`/p/{slug}`, `/api/projects/{p}`) | done | PR #1 |
 | 2 Datasets (upload / URL, fetch + ingest jobs) | done | PR #2 |
 | 3 Query engine (DuckDB service, project SQL) | done | PR #2 |
-| 4 Jobs, rules and pipelines as data; taxi → sample project | **in progress**: 4a–4d done; 4e next | 4a: `phase-4a-job-registry`; 4b: `phase-4b-generic-jobs`; 4c: `phase-4c-rules-as-data`; 4d: `phase-4d-pipelines` |
+| 4 Jobs, rules and pipelines as data; taxi → sample project | **in progress**: 4a–4e-1 done; 4e-2 (delete taxi code) waits for Phase 5, which is next | 4a: `phase-4a-job-registry`; 4b: `phase-4b-generic-jobs`; 4c: `phase-4c-rules-as-data`; 4d: `phase-4d-pipelines`; 4e-1: `phase-4e-taxi-sample` |
 | 5 Saved queries + dashboards; streaming passthrough | pending | — |
 | 6 MCP server with read-only tools | pending | — |
 | 7 Suggestions (heuristics, agent proposals, inbox) | pending | — |
@@ -35,7 +35,11 @@ Milestone 1 ("upload a CSV and query it") is complete on `main`.
   Dashboards' model-quality queries read `fare_model` until Phase 5 replaces them.
 - Pipelines are linear and only the first step takes run-time params (`POST .../pipelines/{name}/run`
   with `{"params": {...}}`). The orchestrator assumes one control-plane process (see its shortcut note).
-- The taxi pipeline is seeded by migration 0009 until 4e moves it into `project.json`.
+- The taxi pipeline is seeded by migration 0009 for the legacy `nyc-taxi` project; the generic
+  version lives in `samples/nyc_taxi/project.json` (imported as `nyc-taxi-sample`). The sample's rules are
+  `silver_rules.json` with `getvariable('period_year')` replaced by 2025; keep both until 4e-2 deletes the legacy one.
+- Project files carry URL datasets and pipelines only (uploads and rules on derived datasets are left out),
+  and the sample is one month (a URL dataset has one file).
 - `replay` spends about 85 s in Spark loading all of Silver before its first send. A
   cancel during that load waits out the runner's 5 s grace and is then terminated, which
   is fine, but it makes the Streaming screen slow to start. Phase 5 replaces it.
@@ -91,8 +95,9 @@ derived datasets with lineage in `source`, `requires_feature` on jobs) → ~~**4
 `PUT`/`POST .../datasets/{name}/rules[/test]`, the dataset page's Rules tab, the taxi Silver job runs
 `silver_rules.json` through the shared engine, golden check 13/13 months) → ~~**4d**~~ pipelines (done: `pipelines` /
 `pipeline_runs` tables, `job_runs.pipeline_run_id`/`step_index`, `internal/pipelines` decides each step, `api/orchestrator.go`
-reconciles from Postgres every 2 s, the Pipelines screen's `PipelinesPanel`; Run All is gone) → **4e** `samples/nyc_taxi/project.json`,
-import/export, delete the taxi code and the `legacy_taxi` flag.
+reconciles from Postgres every 2 s, the Pipelines screen's `PipelinesPanel`; Run All is gone) → ~~**4e-1**~~ project files (done: `internal/bundle`, `POST /api/projects/import`, `GET .../export`,
+`samples/nyc_taxi/project.json` runs the taxi chain on generic jobs) → **4e-2** delete the taxi code and the
+`legacy_taxi` flag, once Phase 5 has replaced Dashboards' and Streaming's taxi queries (so 4e-2 lands with or after 5).
 
 ## Conventions
 - Commit messages: imperative subject, body says *why*; one PR per slice; squash-merge.

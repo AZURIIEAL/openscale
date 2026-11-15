@@ -7,4 +7,5 @@ export const httpProjectsGateway: ProjectsGateway = {
   create: (input) => apiPost<Project>('/api/projects', input),
   update: (slug, patch) => apiPatch<Project>(`/api/projects/${encodeURIComponent(slug)}`, patch),
   archive: (slug) => apiDelete(`/api/projects/${encodeURIComponent(slug)}`),
+  importProject: (bundle) => apiPost<Project>('/api/projects/import', bundle),
 };

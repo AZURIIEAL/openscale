@@ -4,24 +4,32 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"io"
 	"net/http"
 	"time"
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/AZURIIEAL/openscale/control-plane/internal/bundle"
 	"github.com/AZURIIEAL/openscale/control-plane/internal/db"
+	"github.com/AZURIIEAL/openscale/control-plane/internal/pipelines"
 	"github.com/AZURIIEAL/openscale/control-plane/internal/projects"
 )
 
 // ProjectsHandler serves project CRUD plus the middleware that resolves
 // `{projectId}` for every project-scoped route.
 type ProjectsHandler struct {
-	db *db.DB
+	db         *db.DB
+	dispatcher *Dispatcher
 }
 
-func NewProjectsHandler(database *db.DB) *ProjectsHandler {
-	return &ProjectsHandler{db: database}
+func NewProjectsHandler(database *db.DB, dispatcher *Dispatcher) *ProjectsHandler {
+	return &ProjectsHandler{db: database, dispatcher: dispatcher}
 }
+
+// maxBundleBytes bounds a project file: definitions only, no data.
+const maxBundleBytes = 4 << 20
 
 type projectCtxKey struct{}
 
@@ -133,10 +141,86 @@ func (h *ProjectsHandler) Archive(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// Import handles POST /api/projects/import: a project file (see
+// internal/bundle) becomes a new project with its datasets and pipelines,
+// and each dataset's fetch is queued. The project lands even when a fetch
+// can't be queued; that dataset is marked failed with the reason.
+func (h *ProjectsHandler) Import(w http.ResponseWriter, r *http.Request) {
+	raw, err := io.ReadAll(http.MaxBytesReader(w, r.Body, maxBundleBytes))
+	if err != nil {
+		http.Error(w, "project file too large or unreadable", http.StatusBadRequest)
+		return
+	}
+	b, err := bundle.Parse(raw)
+	if err != nil {
+		writeProjectErr(w, err)
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
+	defer cancel()
+
+	// A new project has no features, so feature-gated jobs are refused here.
+	for _, p := range b.Pipelines {
+		if err := checkSteps(ctx, h.db, p.Steps, projects.Project{}.HasFeature); err != nil {
+			writeProjectErr(w, fmt.Errorf("pipeline %s: %w", p.Name, err))
+			return
+		}
+	}
+	p, created, err := h.db.ImportProject(ctx, b)
+	if err != nil {
+		writeProjectErr(w, err)
+		return
+	}
+	for _, ds := range created {
+		params, _ := json.Marshal(map[string]any{"dataset_id": ds.ID, "dataset_name": ds.Name, "url": ds.Source.URL})
+		run, err := h.dispatcher.Dispatch(ctx, p.ID, jobDatasetFetch, params)
+		switch {
+		case err != nil:
+			_ = h.db.MarkDatasetFailed(ctx, ds.ID, "could not queue "+jobDatasetFetch+": "+err.Error())
+		case run.Error != nil:
+			_ = h.db.MarkDatasetFailed(ctx, ds.ID, *run.Error)
+		}
+	}
+	writeJSON(w, http.StatusCreated, p)
+}
+
+// Export handles GET /api/projects/{projectId}/export: the project as a
+// file Import accepts.
+func (h *ProjectsHandler) Export(w http.ResponseWriter, r *http.Request) {
+	p, _ := ProjectFromContext(r.Context())
+	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
+	defer cancel()
+
+	all, err := h.db.ListDatasets(ctx, p.ID)
+	if err != nil {
+		writeProjectErr(w, err)
+		return
+	}
+	pls, err := h.db.ListPipelines(ctx, p.ID)
+	if err != nil {
+		writeProjectErr(w, err)
+		return
+	}
+	b, err := bundle.Export(p, all, pls)
+	if err != nil {
+		writeProjectErr(w, err)
+		return
+	}
+	out, err := json.MarshalIndent(b, "", "  ")
+	if err != nil {
+		writeProjectErr(w, err)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Content-Disposition", `attachment; filename="`+p.Slug+`.json"`)
+	_, _ = w.Write(append(out, '\n'))
+}
+
 // writeProjectErr maps the domain/db sentinel errors to HTTP statuses.
 func writeProjectErr(w http.ResponseWriter, err error) {
 	switch {
-	case errors.Is(err, projects.ErrInvalid):
+	case errors.Is(err, projects.ErrInvalid), errors.Is(err, bundle.ErrInvalid), errors.Is(err, pipelines.ErrInvalid):
 		http.Error(w, err.Error(), http.StatusBadRequest)
 	case errors.Is(err, db.ErrNotFound):
 		http.Error(w, "project not found", http.StatusNotFound)

@@ -47,6 +47,7 @@ internal/
   redis/             The only go-redis user: job request stream, live event pub/sub, control hashes
   streaming/         The only kafka-go user: topic listing, trip consumer, windowed aggregates, WS hub
   datasets/          Dataset domain: name/URL rules, lake layout (pure, tested)
+  bundle/            Project file format: parse/validate an import, build an export (pure, tested)
   projects/          Project domain: type, slug rules, create/update validation (pure, tested)
   queryengine/       HTTP client for the DuckDB query service (query-engine/)
   sqlcheck/          Single-SELECT check for the SQL editor (pure, tested)
@@ -70,6 +71,8 @@ Every route is registered in
 | POST | `/api/services/{id}/start` · `/stop` · `/restart` | Container control (IDs: `minio`, `kafka`, `postgres`, `redis`, `prometheus`, `grafana`, `worker`, `jupyter`, `mlflow`) |
 | GET | `/api/container-stats` | Per-container CPU/memory plus host totals |
 | GET / POST | `/api/projects` | List projects · create one (`{"name", "slug"?, "description"?}`, slug derived from the name when omitted) |
+| POST | `/api/projects/import` | Create a project from a project file (`internal/bundle`, format `openscale/project@1`): its URL datasets (with rules, each fetch queued) and pipelines, in one transaction. `400` names the bad part, `409` if the slug is taken |
+| GET | `/api/projects/{p}/export` | The project as a project file (attachment `{slug}.json`) |
 | GET / PATCH / DELETE | `/api/projects/{p}` | One project · rename/describe/`aiSettings` · archive (runs are kept). `{p}` is the id **or the slug** everywhere below |
 | GET | `/api/jobs/catalog` | Every job type the worker publishes: label, description, stage, `listed`, `requiresFeature`, `paramsSchema` |
 | POST | `/api/projects/{p}/jobs/{type}/run` | Queue a job. Body = JSON params, validated against the type's `paramsSchema` (`400` if they don't fit or the project lacks the job's `requiresFeature`, `404` for a type not in the catalog). Returns the run (`202`) |
