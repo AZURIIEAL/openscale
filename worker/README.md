@@ -37,7 +37,7 @@ generic jobs and deletes these):
 | Type | Module | Reads → writes | Params |
 |---|---|---|---|
 | `ingest` | `jobs/ingest.py` → `ingestion/run_ingestion.py` | NYC TLC download → schema check → **Bronze** (MinIO) | `start`, `end` as `YYYY-MM` |
-| `silver` | `jobs/silver.py` → `spark/silver/validator.py` | Bronze → **Silver** + quarantine (MinIO), JSON quality report per month in `docs/quality-reports/` | none |
+| `silver` | `jobs/silver.py` → `spark/silver/validator.py` | Bronze → **Silver** + one quarantine file per rule (MinIO), applying the ten rules in `spark/silver/silver_rules.json` with the same engine as `validate` (DuckDB). JSON quality report per month in `docs/quality-reports/` and in the run's metrics | none |
 | `gold` | `jobs/gold.py` → `spark/gold/run_gold.py` | Silver → **Gold**: daily revenue, hourly demand, zone stats, congestion (MinIO + Postgres) | none |
 | `features` | `jobs/features.py` → `feature_store/feature_jobs/compute_features.py` | Silver → zone × hour features → Postgres (offline) + Redis (online) | none |
 | `fare_model` | `jobs/fare_model.py` → `ml/training/train_fare_model.py` | Silver sample → fare model, logged to MLflow. Called `train` before Phase 4b | none |

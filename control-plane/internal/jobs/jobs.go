@@ -56,6 +56,9 @@ type Run struct {
 	// not every job type can report it cheaply (Gold's outputs are
 	// aggregate tables, not a row-for-row count), so it stays nil there.
 	RowsProcessed *int64 `json:"rowsProcessed,omitempty"`
+	// Metrics is what the job reported (JobContext.set_metrics): validate's
+	// per-rule report, train's scores, silver's per-month quality reports.
+	Metrics json.RawMessage `json:"metrics,omitempty"`
 }
 
 // StatusCount is how many runs of one job type sit in one status --

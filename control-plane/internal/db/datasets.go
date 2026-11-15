@@ -123,6 +123,28 @@ func (d *DB) MarkDatasetFailed(ctx context.Context, id, reason string) error {
 	return nil
 }
 
+// UpdateDatasetRules replaces a dataset's quality rules (already validated
+// by datasets.ParseRules) and returns the updated row.
+func (d *DB) UpdateDatasetRules(ctx context.Context, id string, rules []datasets.Rule) (datasets.Dataset, error) {
+	rulesJSON, err := json.Marshal(rules)
+	if err != nil {
+		return datasets.Dataset{}, fmt.Errorf("db: encode dataset rules: %w", err)
+	}
+	row := d.pool.QueryRow(ctx,
+		`UPDATE control_plane.datasets SET rules = $2::jsonb, updated_at = now()
+		 WHERE id = $1::uuid RETURNING `+datasetColumns,
+		id, rulesJSON,
+	)
+	ds, err := scanDataset(row)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return datasets.Dataset{}, fmt.Errorf("db: dataset %s: %w", id, ErrNotFound)
+		}
+		return datasets.Dataset{}, fmt.Errorf("db: update dataset rules: %w", err)
+	}
+	return ds, nil
+}
+
 // DeleteDataset removes the row. The caller removes the lake prefix.
 func (d *DB) DeleteDataset(ctx context.Context, id string) error {
 	tag, err := d.pool.Exec(ctx, `DELETE FROM control_plane.datasets WHERE id = $1::uuid`, id)

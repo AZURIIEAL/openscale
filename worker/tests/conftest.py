@@ -1,6 +1,7 @@
-"""Shared fixtures. Tests here import only pure modules (spark/silver/rules.py,
-jobs/outcome.py, ingestion/downloader's month_range, the schema validator),
-so they run with pandas alone -- no MinIO, Postgres, Spark or network."""
+"""Shared fixtures. Tests here import only pure modules (the taxi Silver
+rules, jobs/outcome.py, ingestion/downloader's month_range, the schema
+validator), so they run with pandas and a local DuckDB -- no MinIO,
+Postgres, Spark or network."""
 
 import pandas as pd
 import pytest

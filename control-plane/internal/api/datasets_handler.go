@@ -335,6 +335,95 @@ func (h *DatasetsHandler) Profile(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, prof)
 }
 
+// maxRulesBody bounds a rules request: MaxRules rules of MaxRuleWhen
+// characters, with room for notes and JSON framing.
+const maxRulesBody = 2 << 20
+
+type rulesBody struct {
+	Rules json.RawMessage `json:"rules"`
+}
+
+// readRules decodes {"rules": [...]} and validates it against the dataset.
+func readRules(w http.ResponseWriter, r *http.Request, ds datasets.Dataset) ([]datasets.Rule, error) {
+	var body rulesBody
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxRulesBody)).Decode(&body); err != nil {
+		return nil, fmt.Errorf("%w: expected {\"rules\": [...]}", datasets.ErrInvalidRules)
+	}
+	if len(body.Rules) == 0 {
+		return nil, fmt.Errorf("%w: expected {\"rules\": [...]}", datasets.ErrInvalidRules)
+	}
+	return datasets.ParseRules(body.Rules, ds.Columns)
+}
+
+// UpdateRules handles PUT /api/projects/{p}/datasets/{name}/rules with
+// {"rules": [...]}. The shape is checked here; for a ready dataset the
+// query engine also checks that every condition is valid SQL over its
+// columns, so a saved rule set always runs. 400 names the bad rule.
+func (h *DatasetsHandler) UpdateRules(w http.ResponseWriter, r *http.Request) {
+	ds, ok := h.load(w, r)
+	if !ok {
+		return
+	}
+	rules, err := readRules(w, r, ds)
+	if err != nil {
+		writeDatasetErr(w, err)
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 60*time.Second)
+	defer cancel()
+
+	if ds.Status == datasets.StatusReady && len(rules) > 0 {
+		res, err := h.engine.TestRules(ctx, ds.ProjectID, DatasetRef(ds), rules, true)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadGateway)
+			return
+		}
+		if res.Error != "" {
+			http.Error(w, res.Error, http.StatusBadRequest)
+			return
+		}
+	}
+	updated, err := h.db.UpdateDatasetRules(ctx, ds.ID, rules)
+	if err != nil {
+		writeDatasetErr(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, updated)
+}
+
+// TestRules handles POST /api/projects/{p}/datasets/{name}/rules/test with
+// {"rules": [...]}, saved or not: what a validate run would keep, remove
+// and flag, per rule, over the whole dataset. Like the SQL editor, a
+// problem with the rules is a 200 {error}; nothing is written.
+func (h *DatasetsHandler) TestRules(w http.ResponseWriter, r *http.Request) {
+	ds, ok := h.load(w, r)
+	if !ok {
+		return
+	}
+	rules, err := readRules(w, r, ds)
+	if err != nil {
+		if errors.Is(err, datasets.ErrInvalidRules) {
+			writeJSON(w, http.StatusOK, queryengine.RulesResult{Error: strings.TrimPrefix(err.Error(), datasets.ErrInvalidRules.Error()+": ")})
+			return
+		}
+		writeDatasetErr(w, err)
+		return
+	}
+	if ds.Status != datasets.StatusReady {
+		writeJSON(w, http.StatusOK, queryengine.RulesResult{Error: "dataset is not ready yet"})
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 3*time.Minute)
+	defer cancel()
+
+	res, err := h.engine.TestRules(ctx, ds.ProjectID, DatasetRef(ds), rules, false)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadGateway)
+		return
+	}
+	writeJSON(w, http.StatusOK, res)
+}
+
 // DatasetRef builds the query engine's view of a dataset: its name and the
 // Parquet glob under data/.
 func DatasetRef(ds datasets.Dataset) queryengine.DatasetRef {
@@ -359,7 +448,7 @@ func (h *DatasetsHandler) load(w http.ResponseWriter, r *http.Request) (datasets
 
 func writeDatasetErr(w http.ResponseWriter, err error) {
 	switch {
-	case errors.Is(err, datasets.ErrInvalid):
+	case errors.Is(err, datasets.ErrInvalid), errors.Is(err, datasets.ErrInvalidRules):
 		http.Error(w, err.Error(), http.StatusBadRequest)
 	case errors.Is(err, db.ErrNotFound):
 		http.Error(w, "dataset not found", http.StatusNotFound)

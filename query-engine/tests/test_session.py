@@ -93,3 +93,61 @@ def test_preview_and_profile(session):
 
 def test_profile_of_missing_view_is_inline_error(session):
     assert "error" in session.profile("nothing")
+
+
+# Rules: the dataset page's Save (check_only) and Test.
+RULES = [
+    {"id": "neg", "tier": "reject", "when": "amount < 30"},  # ids 0..19
+    {"id": "c0", "tier": "quarantine", "when": "city = 'c0'"},
+    {"id": "big", "tier": "flag", "when": "amount > 100"},
+    {"id": "all", "tier": "monitor", "when": "true"},
+]
+
+
+def test_rules_test_counts_per_rule(session):
+    out = session.test_rules("orders", RULES, check_only=False, timeout_seconds=10)
+    assert "error" not in out, out
+    assert (out["rowsIn"], out["rejected"]) == (100, 20)
+    # c0 is every third id; 7 of those (0, 3, ..., 18) were already rejected
+    assert out["quarantined"] == 27
+    assert out["rowsOut"] == 100 - 20 - 27
+    by_id = {r["id"]: r for r in out["rules"]}
+    assert (by_id["c0"]["hits"], by_id["c0"]["assigned"]) == (34, 27)
+    assert by_id["big"]["flagged"] == len([i for i in range(67, 100) if i % 3 != 0])
+    assert by_id["all"]["hits"] == 100
+
+
+def test_rules_check_only_binds_without_counting(session):
+    out = session.test_rules("orders", RULES, check_only=True, timeout_seconds=10)
+    assert out["ok"] is True and "rules" not in out
+
+
+@pytest.mark.parametrize(
+    "rules, message",
+    [
+        ([{"id": "x", "tier": "reject", "when": "nope > 1"}], "rule x"),
+        ([{"id": "x", "tier": "drop", "when": "true"}], "tier must be"),
+        ([{"id": "x", "tier": "reject", "when": "true); DROP TABLE orders; SELECT (true"}], "rule x"),
+        ([{"id": "x", "tier": "flag", "when": "true", "column": "amount"}], "already exists"),
+    ],
+)
+def test_bad_rules_come_back_as_errors(session, rules, message):
+    for check_only in (True, False):
+        out = session.test_rules("orders", rules, check_only=check_only, timeout_seconds=10)
+        assert message in out["error"]
+    assert session.run_select("SELECT COUNT(*) FROM orders", 1, 10)["rows"] == [[100]]
+
+
+def test_rules_run_on_a_locked_connection():
+    # Counting creates a temp view and sets variables: both must still work
+    # once the configuration is frozen. A table stands in for the Parquet
+    # view, which lockdown would (rightly) stop reading local files.
+    con = duckdb.connect()
+    con.execute("CREATE TABLE orders AS SELECT range AS id, range * 1.5 AS amount, 'c' || (range % 3) AS city FROM range(100)")
+    lockdown(con)
+    s = Session(con)
+    try:
+        out = s.test_rules("orders", RULES, check_only=False, timeout_seconds=10)
+    finally:
+        s.close()
+    assert out.get("rowsIn") == 100, out

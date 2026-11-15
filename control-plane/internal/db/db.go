@@ -15,6 +15,7 @@ package db
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 
 	"github.com/jackc/pgx/v5"
@@ -45,14 +46,18 @@ func New(pool *pgxpool.Pool) *DB {
 // id is cast to text explicitly rather than relying on pgx's implicit
 // uuid->string scan support, which varies by version -- this guarantees a
 // plain string lands in jobs.Run.ID regardless.
-const runColumns = `id::text, project_id::text, job_type, params, status, submitted_at, started_at, finished_at, error, log_output, rows_processed`
+const runColumns = `id::text, project_id::text, job_type, params, status, submitted_at, started_at, finished_at, error, log_output, rows_processed, metrics`
 
 func scanRun(row pgx.Row) (jobs.Run, error) {
 	var run jobs.Run
+	var metrics []byte
 	err := row.Scan(
 		&run.ID, &run.ProjectID, &run.JobType, &run.Params, &run.Status, &run.SubmittedAt,
-		&run.StartedAt, &run.FinishedAt, &run.Error, &run.LogOutput, &run.RowsProcessed,
+		&run.StartedAt, &run.FinishedAt, &run.Error, &run.LogOutput, &run.RowsProcessed, &metrics,
 	)
+	if len(metrics) > 0 {
+		run.Metrics = json.RawMessage(metrics)
+	}
 	return run, err
 }
 

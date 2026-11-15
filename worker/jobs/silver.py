@@ -1,7 +1,8 @@
 """
-The `silver` job: runs worker.spark.silver.validator (Bronze -> Silver).
-This is the worker's own copy of the pipeline code, not a reference to
-etl-exposure.
+The `silver` job: runs worker.spark.silver.validator (Bronze -> Silver),
+which applies the taxi rules in spark/silver/silver_rules.json through the
+shared rule engine. Each month's quality report also goes to the run's
+metrics.
 """
 
 from registry import JobContext, job
@@ -22,8 +23,11 @@ def silver(ctx: JobContext) -> None:
     period's records_processed (rows read from Bronze, before
     accept/quarantine/reject)."""
     rows = 0
+    reports = []
     for report in run_validator():
         ctx.log(report)
+        reports.append(report)
         rows += report.get("records_processed", 0)
         ctx.set_rows(rows)
+        ctx.set_metrics({"periods": reports})
         ctx.check_cancelled()

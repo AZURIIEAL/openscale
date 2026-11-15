@@ -29,6 +29,14 @@ class PreviewBody(BaseModel):
     limit: int = 20
 
 
+class RulesBody(BaseModel):
+    project_id: str
+    dataset: DatasetRef
+    rules: list = Field(default_factory=list)
+    check_only: bool = False
+    timeout_seconds: int = 120
+
+
 class ProfileBody(BaseModel):
     project_id: str
     dataset: DatasetRef
@@ -75,5 +83,17 @@ def profile(body: ProfileBody) -> dict:
         return error_result(f"could not open a query session: {exc}")
     try:
         return session.profile(body.dataset.name)
+    finally:
+        session.close()
+
+
+@app.post("/rules/test")
+def test_rules(body: RulesBody) -> dict:
+    try:
+        session = Session.open(body.project_id, _views([body.dataset]))
+    except Exception as exc:  # noqa: BLE001
+        return error_result(f"could not open a query session: {exc}")
+    try:
+        return session.test_rules(body.dataset.name, body.rules, body.check_only, body.timeout_seconds)
     finally:
         session.close()

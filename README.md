@@ -125,7 +125,7 @@ embedded real service, not mock data. The caveats are the real limits.
 | Screen | What's real | Limits |
 |---|---|---|
 | **Home** | Live container CPU/memory gauges, job history, Gold-backed revenue trend and stat cards | |
-| **Pipelines** | Triggers the real job queue end to end (control-plane → Redis → worker → Postgres), live status and logs over WebSocket, run forms generated from the job catalog, run-all chaining, Stop all (stops just the jobs' processes, not the worker), clear data | Run All is the fixed taxi chain; pipelines as data come in Phase 4d. No rules editor yet (Phase 4c) |
+| **Pipelines** | Triggers the real job queue end to end (control-plane → Redis → worker → Postgres), live status and logs over WebSocket, run forms generated from the job catalog, run-all chaining, Stop all (stops just the jobs' processes, not the worker), clear data | Run All is the fixed taxi chain; pipelines as data come in Phase 4d |
 | **SQL Editor** | Read-only `SELECT`/`WITH` against Postgres (Gold tables, feature table, job history) inside a read-only transaction, schema browser, query history | Postgres only; Bronze/Silver Parquet in the lake isn't queryable yet |
 | **Data Catalog** | Postgres schema browser (row counts and sample rows) and a live MinIO lake browser (object counts and sizes per layer) | Lineage is a static diagram of the five stages, not computed; no Parquet preview |
 | **Streaming** | `replay` streams real Silver trips onto Kafka; the control-plane tails the topic and pushes live trips and windowed aggregates over WebSocket. Pause, resume, cancel and ×1–×10 speed act on the running replay | One topic, `yellow-taxi-trips` |
@@ -138,11 +138,12 @@ embedded real service, not mock data. The caveats are the real limits.
 
 | **Projects** | Create, switch and archive projects; job history is per project; `/` remembers the last one | Pipelines, Dashboards and Streaming are still the taxi stages, so they only light up in the `nyc-taxi` sample |
 | **Datasets** | Upload a CSV/TSV/Parquet/JSON file (streamed to the lake) or give a URL; the worker converts it to Parquet, infers the schema and profiles every column | One Parquet part per dataset; CSV types are inferred, not reviewable yet |
+| **Quality rules** | Each dataset's Rules tab: SQL conditions that reject, quarantine, flag or just count rows, in priority order. Save checks every condition against the data; Test shows per rule how many rows match and would be removed. The `validate` job applies them, and the taxi Silver stage runs its ten rules the same way | |
 | **SQL over the lake** | The SQL Editor runs DuckDB over a project's datasets (each a view named after it) through the internal `query-engine` service, with the S3 secret scoped to the project, local files disabled and a per-query timeout | The taxi sample still queries Postgres |
 
-**Not built yet:** generic job registry and rules-as-data (the taxi stages
-are still code), saved queries and dashboards for any project, scheduling,
-the assistant, and auth. See [`ideas/vision-and-roadmap.md`](ideas/vision-and-roadmap.md).
+**Not built yet:** pipelines as data (Run All is still the taxi chain),
+saved queries and dashboards for any project, scheduling, the assistant,
+and auth. See [`ideas/vision-and-roadmap.md`](ideas/vision-and-roadmap.md).
 
 ## Architecture
 
@@ -259,10 +260,12 @@ Routes are the one list still kept in sync by hand:
 Tests run in CI ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)):
 `go test ./...` in `control-plane`, `python -m pytest` in `worker`,
 `libs/openscale` and `query-engine`, and `npm test` (vitest) plus `tsc -b`
-in `frontend`. The Silver rule set also
-has a golden check against the original pipeline's quality reports:
-`cd worker && python scripts/golden_check.py 2024-07` (needs that month's
-raw Parquet under `worker/data/raw/yellow_taxi/`).
+in `frontend`. The taxi Silver rules
+(`worker/spark/silver/silver_rules.json`) also have a golden check: they run
+through the shared rule engine on real months and every count must equal
+the original pipeline's quality report. With Bronze loaded:
+`docker compose run --rm --no-deps --entrypoint python -v ./etl-exposure:/etl-exposure:ro worker scripts/golden_check.py --all`
+(the image starts the worker by default, hence `--entrypoint`).
 
 ## Troubleshooting
 

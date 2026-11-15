@@ -1,121 +1,84 @@
 """
-The Silver-layer rule set (docs/silver-layer-specification.md v1) as a pure
-function over a DataFrame: no MinIO, no filesystem, no Spark. validator.py
-wraps this with the Bronze read and the Silver/quarantine writes, which
-means the rules themselves can be unit-tested on a small fixture and
-golden-checked against etl-exposure/docs/quality-reports/ without a stack.
+The taxi Silver rules (docs/silver-layer-specification.md v1) are data now:
+silver_rules.json, run by the same engine as the generic `validate` job
+(libs/openscale/openscale/rules.py). This module only holds what is
+specific to the taxi pipeline: the period variables the year flags read,
+and the mapping from the engine's per-rule counts to the quality report the
+original pipeline wrote (etl-exposure/docs/quality-reports/), which the
+golden check (scripts/golden_check.py) compares field by field.
 
-Rule tiers:
-  REJECT     SLV-001/002 (null pickup/dropoff), SLV-003 (dropoff <= pickup),
-             SLV-004 (negative trip distance) -- structurally invalid records.
-  QUARANTINE SLV-005 (passenger_count <= 0), SLV-006 (negative fare),
-             SLV-007 (negative total), SLV-010 (trip_distance > 100mi).
-  FLAG       SLV-008/009 (pickup/dropoff year outside the reporting period)
-             -- record stays in Silver, just annotated.
-  MONITOR    Nulls in passenger_count, RatecodeID, store_and_fwd_flag,
-             congestion_surcharge, Airport_fee -- counted only.
+Rule order is the original priority: timestamps (SLV-001..003) > distance
+(SLV-004 reject, SLV-010 quarantine) > passengers (SLV-005) > fare
+(SLV-006) > total (SLV-007), so a row lands in exactly one quarantine file.
+SLV-008/009 flag kept rows; the MON- rules only count missing values.
 
-A record can trip more than one rule; it is assigned to a single quarantine
-category by priority (timestamp > distance > passenger > fare > total) so no
-row is written twice.
+Phase 4e moves silver_rules.json onto the sample project's Bronze dataset
+(datasets.rules) and deletes this module.
 """
 
-from dataclasses import dataclass
+import json
+from pathlib import Path
 
-import pandas as pd
+import duckdb
 
-MAX_TRIP_DISTANCE_MILES = 100
+from openscale.rules import Rule, RuleRun, parse_rules
 
-MISSING_VALUE_COLUMNS = [
-    "passenger_count",
-    "RatecodeID",
-    "store_and_fwd_flag",
-    "congestion_surcharge",
-    "Airport_fee",
-]
+RULES_FILE = Path(__file__).with_name("silver_rules.json")
 
-# Quarantine file names, in priority order.
-QUARANTINE_CATEGORIES = [
-    "invalid_timestamps",
-    "distance_outliers",
-    "invalid_passenger_count",
-    "negative_fares",
-    "negative_total_amounts",
-]
-
-
-@dataclass
-class RuleOutcome:
-    """What one period's rule pass produced, before anything is written."""
-
-    accepted: pd.DataFrame
-    quarantine: dict[str, pd.DataFrame]
-    report: dict
+# Report field -> the rules whose removed rows it counts.
+QUARANTINE_CATEGORIES: dict[str, tuple[str, ...]] = {
+    "invalid_timestamps": ("SLV-001", "SLV-002", "SLV-003"),
+    "negative_fares": ("SLV-006",),
+    "invalid_passenger_counts": ("SLV-005",),
+    "distance_outliers": ("SLV-004", "SLV-010"),
+    "negative_total_amounts": ("SLV-007",),
+}
+FLAG_FIELDS = {
+    "SLV-008": "records_flagged_pickup_year_mismatch",
+    "SLV-009": "records_flagged_dropoff_year_mismatch",
+}
+MONITOR_PREFIX = "MON-"
 
 
-def apply_rules(df: pd.DataFrame, year: int, month: int) -> RuleOutcome:
-    """Applies every Silver rule to one Bronze period and returns the clean
-    frame, the per-category quarantine frames and the quality report. The
-    input is not modified."""
-    n = len(df)
+def load_rules(path: Path = RULES_FILE) -> list[Rule]:
+    return parse_rules(json.loads(path.read_text()))
 
-    # --- REJECT tier: SLV-001, SLV-002, SLV-003, SLV-004 ---
-    invalid_timestamp = (
-        df["tpep_pickup_datetime"].isna()
-        | df["tpep_dropoff_datetime"].isna()
-        | (df["tpep_dropoff_datetime"] <= df["tpep_pickup_datetime"])
+
+def period_variables(year: int, month: int) -> dict[str, int]:
+    """What SLV-008/009 compare against: the month being cleaned."""
+    return {"period_year": year, "period_month": month}
+
+
+def count_duplicates(con: duckdb.DuckDBPyConnection, source: str) -> int:
+    """Rows identical to an earlier row (pandas' DataFrame.duplicated()):
+    reported, never removed. DISTINCT treats NULLs as equal, as pandas does."""
+    return int(
+        con.execute(
+            f"SELECT (SELECT COUNT(*) FROM {source}) - (SELECT COUNT(*) FROM (SELECT DISTINCT * FROM {source}))"
+        ).fetchone()[0]
     )
-    negative_distance = df["trip_distance"] < 0
 
-    # --- QUARANTINE tier: SLV-005, SLV-006, SLV-007, SLV-010 ---
-    distance_outlier = df["trip_distance"] > MAX_TRIP_DISTANCE_MILES
-    invalid_passenger_count = df["passenger_count"] <= 0
-    negative_fare = df["fare_amount"] < 0
-    negative_total = df["total_amount"] < 0
 
-    # Priority assignment so a row lands in exactly one quarantine file.
-    cat_timestamps = invalid_timestamp
-    cat_distance = (negative_distance | distance_outlier) & ~cat_timestamps
-    cat_passenger = invalid_passenger_count & ~cat_timestamps & ~cat_distance
-    cat_fare = negative_fare & ~cat_timestamps & ~cat_distance & ~cat_passenger
-    cat_total = negative_total & ~cat_timestamps & ~cat_distance & ~cat_passenger & ~cat_fare
+def quality_report(run: RuleRun, year: int, month: int, duplicates: int) -> dict:
+    """The original pipeline's quality report, from the engine's counts."""
+    by_id = {r.id: r for r in run.rules}
 
-    excluded_mask = cat_timestamps | cat_distance | cat_passenger | cat_fare | cat_total
-    accepted = df[~excluded_mask].copy()
-
-    reject_mask = cat_timestamps | (cat_distance & negative_distance)
-    quarantine_mask = excluded_mask & ~reject_mask
-
-    # --- FLAG tier: SLV-008, SLV-009 (kept in Silver, just annotated) ---
-    accepted["flag_pickup_year_mismatch"] = accepted["tpep_pickup_datetime"].dt.year != year
-    accepted["flag_dropoff_year_mismatch"] = accepted["tpep_dropoff_datetime"].dt.year < year
-
-    # --- MONITOR: known-missing columns, counted only ---
-    missing_value_counts = {col: int(df[col].isna().sum()) for col in MISSING_VALUE_COLUMNS if col in df.columns}
-
-    quarantine = {
-        "invalid_timestamps": df[cat_timestamps],
-        "distance_outliers": df[cat_distance],
-        "invalid_passenger_count": df[cat_passenger],
-        "negative_fares": df[cat_fare],
-        "negative_total_amounts": df[cat_total],
-    }
+    def removed(ids: tuple[str, ...]) -> int:
+        return sum(by_id[i].assigned or 0 for i in ids)
 
     report = {
         "period": f"{year:04d}-{month:02d}",
-        "records_processed": int(n),
-        "records_accepted": int(len(accepted)),
-        "records_rejected": int(reject_mask.sum()),
-        "records_quarantined": int(quarantine_mask.sum()),
-        "duplicate_records": int(df.duplicated().sum()),
-        "invalid_timestamps": int(cat_timestamps.sum()),
-        "negative_fares": int(cat_fare.sum()),
-        "invalid_passenger_counts": int(cat_passenger.sum()),
-        "distance_outliers": int(cat_distance.sum()),
-        "negative_total_amounts": int(cat_total.sum()),
-        "records_flagged_pickup_year_mismatch": int(accepted["flag_pickup_year_mismatch"].sum()),
-        "records_flagged_dropoff_year_mismatch": int(accepted["flag_dropoff_year_mismatch"].sum()),
-        "missing_value_counts": missing_value_counts,
+        "records_processed": run.rows_in,
+        "records_accepted": run.rows_out,
+        "records_rejected": run.rejected,
+        "records_quarantined": run.quarantined,
+        "duplicate_records": duplicates,
     }
-
-    return RuleOutcome(accepted=accepted, quarantine=quarantine, report=report)
+    for field, ids in QUARANTINE_CATEGORIES.items():
+        report[field] = removed(ids)
+    for rule_id, field in FLAG_FIELDS.items():
+        report[field] = by_id[rule_id].flagged or 0
+    report["missing_value_counts"] = {
+        r.id.removeprefix(MONITOR_PREFIX): r.hits for r in run.rules if r.id.startswith(MONITOR_PREFIX)
+    }
+    return report
