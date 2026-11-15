@@ -103,6 +103,8 @@ Every route is registered in
 | POST | `/api/query` | Run a read-only `SELECT`/`WITH` (read-only transaction, row-capped). Not yet project-scoped |
 | GET | `/api/query/catalog` | Queryable schemas, tables and columns |
 | GET | `/api/catalog/lake` | MinIO lake contents by layer |
+| GET | `/api/projects/{p}/streaming/topics` | The project's Kafka topics (`{slug}.*`, written by `stream_dataset`), `{topics, brokerReachable}` |
+| GET | `/api/projects/{p}/streaming/ws?topic=` | WebSocket: a live tail of one of the project's topics from now on (`streaming.Client.Tail`): `{"type":"message","offset","value"}` per message, `{"type":"window","count","messagesPerSecond"}` every 2 s. `400` for a topic outside the project |
 | GET | `/api/streaming/topics` | Kafka topics |
 | GET | `/api/streaming/ws` | WebSocket: live trips and windowed aggregates |
 | GET / PUT | `/api/appearance-settings` | Persisted theme and UI settings |

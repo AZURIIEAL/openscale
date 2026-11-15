@@ -6,15 +6,13 @@ import { SqlEditorScreen } from '@/domains/sql-editor/ui/SqlEditorScreen';
 import { DataCatalogScreen } from '@/domains/data-catalog/ui/DataCatalogScreen';
 import { NotebooksScreen } from '@/domains/notebooks/ui/NotebooksScreen';
 import { MlWorkbenchScreen } from '@/domains/ml-workbench/ui/MlWorkbenchScreen';
-import { StreamingScreen } from '@/domains/streaming/ui/StreamingScreen';
+import { StreamingRoute } from '@/domains/streaming/ui/StreamingRoute';
 import { DashboardsRoute } from '@/domains/dashboards/ui/DashboardsRoute';
 import { InfrastructureScreen } from '@/domains/system-health/ui/InfrastructureScreen';
 import { ConnectionsScreen } from '@/domains/connections/ui/ConnectionsScreen';
-import { FEATURE_LEGACY_TAXI } from '@/shared/project/entities';
 import { ProjectLayout } from '@/shared/project/ProjectLayout';
 import { ProjectRedirect } from '@/shared/project/ProjectRedirect';
 import { NewProjectScreen } from '@/shared/project/NewProjectScreen';
-import { RequireFeature } from '@/shared/project/RequireFeature';
 
 /**
  * Route paths mirror shared/layout/navigation.ts's NAV_ENTRIES exactly --
@@ -25,9 +23,9 @@ import { RequireFeature } from '@/shared/project/RequireFeature';
  * project. System screens (Infrastructure, Settings) sit outside any
  * project.
  *
- * Pipelines, Dashboards and Streaming are still hardcoded to the taxi
- * pipeline, so they are gated to the project flagged `legacy_taxi` until
- * Phase 4 of the implementation plan makes them per-project rows.
+ * Dashboards and Streaming pick their screen per project: the legacy
+ * `nyc-taxi` project (flagged `legacy_taxi`) keeps its taxi screens until
+ * 4e-2 deletes them.
  */
 export const router = createBrowserRouter([
   {
@@ -47,15 +45,7 @@ export const router = createBrowserRouter([
           { path: 'ml-workbench', element: <MlWorkbenchScreen /> },
           {
             path: 'streaming',
-            element: (
-              <RequireFeature
-                feature={FEATURE_LEGACY_TAXI}
-                screenName="Streaming"
-                description="Replay currently streams taxi trips onto one fixed topic. Generic topic selection comes with the dataset model."
-              >
-                <StreamingScreen />
-              </RequireFeature>
-            ),
+            element: <StreamingRoute />,
           },
           {
             path: 'dashboards',

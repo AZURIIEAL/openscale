@@ -13,8 +13,8 @@ session needs.
 | 1 Projects (`/p/{slug}`, `/api/projects/{p}`) | done | PR #1 |
 | 2 Datasets (upload / URL, fetch + ingest jobs) | done | PR #2 |
 | 3 Query engine (DuckDB service, project SQL) | done | PR #2 |
-| 4 Jobs, rules and pipelines as data; taxi → sample project | **in progress**: 4a–4e-1 done; 4e-2 (delete taxi code) waits for Phase 5 | 4a: `phase-4a-job-registry`; 4b: `phase-4b-generic-jobs`; 4c: `phase-4c-rules-as-data`; 4d: `phase-4d-pipelines`; 4e-1: `phase-4e-taxi-sample` |
-| 5 Saved queries + dashboards; streaming passthrough | **in progress**: 5a saved queries + dashboards done; 5b streaming next | 5a: `phase-5a-saved-queries` |
+| 4 Jobs, rules and pipelines as data; taxi → sample project | **in progress**: 4a–4e-1 done; 4e-2 (delete taxi code) is next, now that Phase 5 is in | 4a: `phase-4a-job-registry`; 4b: `phase-4b-generic-jobs`; 4c: `phase-4c-rules-as-data`; 4d: `phase-4d-pipelines`; 4e-1: `phase-4e-taxi-sample` |
+| 5 Saved queries + dashboards; streaming passthrough | **done** (5a saved queries + dashboards, 5b generic streaming); 4e-2 next | 5a: PR #10; 5b: `phase-5b-streaming` |
 | 6 MCP server with read-only tools | pending | — |
 | 7 Suggestions (heuristics, agent proposals, inbox) | pending | — |
 | 8 In-app assistant (Agent SDK, approvals) | pending | — |
@@ -40,9 +40,9 @@ Milestone 1 ("upload a CSV and query it") is complete on `main`.
   `silver_rules.json` with `getvariable('period_year')` replaced by 2025; keep both until 4e-2 deletes the legacy one.
 - Project files carry URL datasets and pipelines only (uploads and rules on derived datasets are left out),
   and the sample is one month (a URL dataset has one file).
-- `replay` spends about 85 s in Spark loading all of Silver before its first send. A
-  cancel during that load waits out the runner's 5 s grace and is then terminated, which
-  is fine, but it makes the Streaming screen slow to start. Phase 5 replaces it.
+- `replay` spends about 85 s in Spark loading all of Silver before its first send; only the legacy
+  project uses it now (other projects run `stream_dataset`, which reads with DuckDB). 4e-2 deletes it.
+- Each Streaming tab opens its own Kafka reader (see the shortcut in `streaming/tail.go`).
 
 ## Layout
 
@@ -72,7 +72,7 @@ frontend/        React + Vite. domains/<name>/{domain,application,infrastructure
   A new UI-facing service gets a route in both.
 - **Agent reads freely, proposes writes.** Anything destructive waits for a person.
 - **Taxi keeps working until Phase 4 replaces it.** It is the `nyc-taxi` project with the
-  `legacy_taxi` feature flag; `RequireFeature` gates its screens.
+  `legacy_taxi` feature flag; `DashboardsRoute`/`StreamingRoute` give it the old screens.
 - **Tests with every phase.** Pure logic goes in dependency-free packages so it is testable.
 
 ## Commands

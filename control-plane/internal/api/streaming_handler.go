@@ -95,3 +95,52 @@ func (h *StreamingHandler) write(ctx context.Context, conn *websocket.Conn, fram
 	}
 	return conn.Write(writeCtx, websocket.MessageText, data)
 }
+
+// ProjectTopics handles GET /api/projects/{p}/streaming/topics: the
+// project's own topics (`{slug}.*`), same shape and convention as Topics.
+func (h *StreamingHandler) ProjectTopics(w http.ResponseWriter, r *http.Request) {
+	project, _ := ProjectFromContext(r.Context())
+	ctx, cancel := context.WithTimeout(r.Context(), streamingAdminTimeout)
+	defer cancel()
+
+	all, err := h.client.ListTopics(ctx)
+	if err != nil {
+		writeJSON(w, http.StatusOK, topicsResponse{Topics: []streaming.TopicInfo{}, BrokerReachable: false})
+		return
+	}
+	mine := []streaming.TopicInfo{}
+	for _, t := range all {
+		if streaming.TopicAllowed(project.Slug, t.Name) {
+			mine = append(mine, t)
+		}
+	}
+	writeJSON(w, http.StatusOK, topicsResponse{Topics: mine, BrokerReachable: true})
+}
+
+// ProjectWS handles GET /api/projects/{p}/streaming/ws?topic=: a live tail
+// of one of the project's topics (streaming.Client.Tail), from now on.
+func (h *StreamingHandler) ProjectWS(w http.ResponseWriter, r *http.Request) {
+	project, _ := ProjectFromContext(r.Context())
+	topic := r.URL.Query().Get("topic")
+	if !streaming.TopicAllowed(project.Slug, topic) {
+		http.Error(w, "topic must be one of this project's ("+streaming.ProjectTopicPrefix(project.Slug)+"*)", http.StatusBadRequest)
+		return
+	}
+	conn, err := websocket.Accept(w, r, &websocket.AcceptOptions{OriginPatterns: []string{h.allowedOrigin}})
+	if err != nil {
+		return
+	}
+	defer conn.CloseNow()
+
+	// CloseRead ends ctx when the browser goes away (this socket only sends).
+	ctx := conn.CloseRead(r.Context())
+	h.client.Tail(ctx, topic, func(frame streaming.TailFrame) error {
+		data, err := json.Marshal(frame)
+		if err != nil {
+			return nil
+		}
+		writeCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+		defer cancel()
+		return conn.Write(writeCtx, websocket.MessageText, data)
+	})
+}

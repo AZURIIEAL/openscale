@@ -126,9 +126,10 @@ keys carry it second (`['pipelines', slug, 'runs', page]`), so switching
 projects never shows another project's cached data. The control-plane
 accepts the slug wherever its routes say `{projectId}`.
 
-Dashboards and Streaming are still hardcoded to the taxi pipeline, so
-`RequireFeature` gates them to the project flagged `legacy_taxi` (the
-`nyc-taxi` sample) until Phases 4 and 5 make them per-project rows.
+Dashboards and Streaming pick their screen per project (`DashboardsRoute`,
+`StreamingRoute`): the legacy `nyc-taxi` project (flagged `legacy_taxi`) keeps
+its taxi screens until 4e-2; every other project gets its saved-query
+dashboard and the generic stream screen (`ProjectStreamingScreen`).
 Pipelines is open to every project: it lists the catalog jobs whose
 `requiresFeature` the project has, above them the project's saved pipelines
 (`PipelinesPanel`, `PipelineEditor`), and only the taxi project gets Clear data.
