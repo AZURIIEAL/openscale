@@ -53,3 +53,10 @@ export type StreamFrame = { type: 'trip'; trip: TripEvent } | { type: 'window'; 
  * WebSocket-lifecycle-dependent -- this is shown as a connection-status
  * indicator on the screen itself. */
 export type ConnectionStatus = 'connecting' | 'live' | 'disconnected';
+
+/** One frame of a project topic's live tail -- mirrors
+ * control-plane/internal/streaming.TailFrame. A message's value is whatever
+ * JSON the producer sent (a row object for stream_dataset). */
+export type TailFrame =
+  | { type: 'message'; offset: number; value: unknown }
+  | { type: 'window'; count: number; messagesPerSecond: number };

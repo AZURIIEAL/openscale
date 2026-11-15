@@ -123,6 +123,8 @@ func NewRouter(
 			r.Get("/pipeline-runs/{id}", pipelinesHandler.GetRun)
 			r.Post("/pipeline-runs/{id}/cancel", pipelinesHandler.CancelRun)
 
+			r.Get("/streaming/topics", streamingHandler.ProjectTopics)
+			r.Get("/streaming/ws", streamingHandler.ProjectWS)
 			r.Get("/saved-queries", savedQueriesHandler.List)
 			r.Put("/saved-queries/{name}", savedQueriesHandler.Put)
 			r.Delete("/saved-queries/{name}", savedQueriesHandler.Delete)

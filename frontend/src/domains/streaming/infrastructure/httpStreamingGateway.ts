@@ -1,7 +1,7 @@
 import { apiGet, wsUrl } from '@/shared/api/httpClient';
 import { httpJobControlGateway } from '@/domains/pipelines/infrastructure/httpJobControlGateway';
 import type { StreamingGateway } from '../application/StreamingGateway';
-import type { KafkaTopic, TripEvent, WindowAggregate } from '../domain/entities';
+import type { ConnectionStatus, KafkaTopic, TripEvent, WindowAggregate } from '../domain/entities';
 
 interface ApiTopicsResponse {
   topics: { name: string; partitions: number; messageCount: number }[];
@@ -90,57 +90,62 @@ export const httpStreamingGateway: StreamingGateway = {
     return httpJobControlGateway.triggerRun(projectSlug, 'replay', body);
   },
 
-  // The user may load this screen before Kafka/any replay has ever run, or
-  // the control-plane may restart -- so this always retries with capped
-  // exponential backoff rather than giving up after one failed attempt.
   connect(onFrame, onStatusChange) {
-    let socket: WebSocket | null = null;
-    let closed = false;
-    let attempt = 0;
-    let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+    return openLiveSocket(
+      '/api/streaming/ws',
+      (data: ApiFrame) => {
+        if (data.type === 'trip') onFrame({ type: 'trip', trip: mapTrip(data.trip) });
+        else if (data.type === 'window') onFrame({ type: 'window', window: mapWindow(data.window) });
+      },
+      onStatusChange,
+    );
+  },
+};
 
-    function open() {
+/**
+ * Opens a WebSocket on path and keeps it open: the user may load a screen
+ * before Kafka or any stream has run, or the control-plane may restart, so
+ * it always retries with capped exponential backoff. Each message is parsed
+ * as JSON (a malformed one is skipped). Returns a cleanup function that
+ * closes the socket and cancels any pending reconnect.
+ */
+export function openLiveSocket<T>(path: string, onData: (data: T) => void, onStatusChange?: (status: ConnectionStatus) => void): () => void {
+  let socket: WebSocket | null = null;
+  let closed = false;
+  let attempt = 0;
+  let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+
+  function open() {
+    if (closed) return;
+    onStatusChange?.('connecting');
+    socket = new WebSocket(wsUrl(path));
+    socket.onopen = () => {
+      attempt = 0;
+      onStatusChange?.('live');
+    };
+    socket.onmessage = (event) => {
+      let data: T;
+      try {
+        data = JSON.parse(event.data);
+      } catch {
+        return;
+      }
+      onData(data);
+    };
+    socket.onclose = () => {
       if (closed) return;
-      onStatusChange?.('connecting');
-      socket = new WebSocket(wsUrl('/api/streaming/ws'));
-
-      socket.onopen = () => {
-        attempt = 0;
-        onStatusChange?.('live');
-      };
-      socket.onmessage = (event) => {
-        try {
-          const data: ApiFrame = JSON.parse(event.data);
-          if (data.type === 'trip') {
-            onFrame({ type: 'trip', trip: mapTrip(data.trip) });
-          } else if (data.type === 'window') {
-            onFrame({ type: 'window', window: mapWindow(data.window) });
-          }
-        } catch {
-          // Malformed frame -- skip it rather than crash the live feed.
-        }
-      };
-      socket.onclose = () => {
-        if (closed) return;
-        onStatusChange?.('disconnected');
-        scheduleReconnect();
-      };
-      socket.onerror = () => socket?.close();
-    }
-
-    function scheduleReconnect() {
-      if (closed) return;
+      onStatusChange?.('disconnected');
       const delay = Math.min(RECONNECT_BASE_DELAY_MS * 2 ** attempt, RECONNECT_MAX_DELAY_MS);
       attempt += 1;
       reconnectTimer = setTimeout(open, delay);
-    }
-
-    open();
-
-    return () => {
-      closed = true;
-      if (reconnectTimer) clearTimeout(reconnectTimer);
-      socket?.close();
     };
-  },
-};
+    socket.onerror = () => socket?.close();
+  }
+
+  open();
+  return () => {
+    closed = true;
+    if (reconnectTimer) clearTimeout(reconnectTimer);
+    socket?.close();
+  };
+}

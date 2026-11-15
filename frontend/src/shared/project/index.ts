@@ -8,4 +8,3 @@ export { ProjectSwitcher } from './ProjectSwitcher';
 export { ProjectLayout } from './ProjectLayout';
 export { ProjectRedirect } from './ProjectRedirect';
 export { NewProjectScreen } from './NewProjectScreen';
-export { RequireFeature } from './RequireFeature';

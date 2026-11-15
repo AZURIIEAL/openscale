@@ -24,30 +24,17 @@ rather than a kill. See POST /api/jobs/{id}/control on the Go side.
 
 import json
 import os
-import time
-from typing import Callable
 
 import pandas as pd
 from kafka import KafkaProducer
 from pyspark.sql import functions as F
 
-from common.db import get_redis_client
-from redis_client import control_key as run_control_key
+import live_control
 from registry import JobCancelled, JobContext, Param, job
 from spark.common.loader import load_silver_trips
 from spark.common.spark_session import get_spark
 
 TRIPS_TOPIC = "yellow-taxi-trips"
-
-# Matches the TTL the Go side sets on the same key (see
-# control-plane/internal/redis.controlKeyTTL) -- a second safety net in
-# case this job crashes before its own cleanup runs.
-CONTROL_KEY_TTL_SECONDS = 60 * 60
-
-# How long to sleep between re-checks of the control hash while paused --
-# short enough that resume/cancel feel responsive, long enough not to hammer
-# Redis.
-PAUSE_POLL_SECONDS = 0.5
 
 # Caps so a UI user can't accidentally request something absurd (a
 # multi-hour send, or a flood that starves the broker).
@@ -92,47 +79,6 @@ def _load_day(pickup_date: str | None) -> tuple[str, pd.DataFrame]:
         spark.stop()
 
 
-def _poll_control(r, control_key: str, log: Callable[[str], None], paused_flag: list[bool]) -> tuple[bool, dict]:
-    """Checks the control hash once, blocking (in short polls) while
-    paused==\"true\". Returns (cancelled, state) -- state is whatever the
-    hash held the moment polling stopped, so the caller can read a fresh
-    `speed` without a second round-trip. cancelled is checked both here and,
-    while paused, on every re-poll -- so a user can cancel out of a pause."""
-    state = r.hgetall(control_key)
-    if state.get("cancelled") == "true":
-        return True, state
-
-    if state.get("paused") == "true":
-        if not paused_flag[0]:
-            log("paused")
-            paused_flag[0] = True
-        while True:
-            time.sleep(PAUSE_POLL_SECONDS)
-            state = r.hgetall(control_key)
-            if state.get("cancelled") == "true":
-                return True, state
-            if state.get("paused") != "true":
-                break
-        log("resumed")
-        paused_flag[0] = False
-
-    return False, state
-
-
-def _sleep_unless_cancelled(r, control_key: str | None, seconds: float) -> None:
-    """Sleeps between sends in short slices, returning early once the run is
-    cancelled -- the next _poll_control then sees it. At the slowest rate a
-    send gap is 10s, longer than the runner's cancel grace period."""
-    end = time.monotonic() + seconds
-    while True:
-        remaining = end - time.monotonic()
-        if remaining <= 0:
-            return
-        time.sleep(min(remaining, PAUSE_POLL_SECONDS))
-        if r is not None and r.hget(control_key, "cancelled") == "true":
-            return
-
-
 @job(
     "replay",
     "Replay Trips",
@@ -159,21 +105,8 @@ def replay(ctx: JobContext) -> None:
     Streaming screen or cancel-all."""
     date_param, limit, messages_per_second = _resolve_params(ctx.params)
 
-    r = get_redis_client() if ctx.job_id else None
-    control_key = run_control_key(ctx.job_id) if ctx.job_id else None
+    r, control_key = live_control.start(ctx.job_id)
     paused_flag = [False]
-    if r is not None:
-        # HSETNX per field, not a blanket HSET -- a pause/cancel/speed
-        # command can reach the control-plane (and get written here) while
-        # this run is still "queued" in the UI, before the worker has even
-        # picked it up. A blanket HSET at init would silently clobber that
-        # command back to the default the instant this job starts; HSETNX
-        # only fills in fields nobody's touched yet. The worker deletes the
-        # key when the run ends; the TTL is the safety net.
-        r.hsetnx(control_key, "paused", "false")
-        r.hsetnx(control_key, "speed", "1")
-        r.hsetnx(control_key, "cancelled", "false")
-        r.expire(control_key, CONTROL_KEY_TTL_SECONDS)
 
     pickup_date, day_df = _load_day(date_param)
     if len(day_df) > limit:
@@ -197,7 +130,7 @@ def replay(ctx: JobContext) -> None:
     for _, row in day_df.iterrows():
         speed = 1.0
         if r is not None:
-            cancelled, state = _poll_control(r, control_key, ctx.log, paused_flag)
+            cancelled, state = live_control.poll(r, control_key, ctx.log, paused_flag)
             if cancelled:
                 producer.flush()
                 ctx.log(f"cancelled after {sent}/{total} trips")
@@ -214,7 +147,7 @@ def replay(ctx: JobContext) -> None:
             ctx.log(f"sent {sent}/{total} trips")
         # speed is read fresh every iteration, so a live change from the
         # Streaming screen takes effect on the very next send.
-        _sleep_unless_cancelled(r, control_key, delay_seconds / speed)
+        live_control.sleep_unless_cancelled(r, control_key, delay_seconds / speed)
 
     producer.flush()
     ctx.log(f"sent {sent}/{sent} trips to topic '{TRIPS_TOPIC}'")
