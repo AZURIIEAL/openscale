@@ -41,3 +41,22 @@ export interface QueryHistoryEntry {
   /** Absent for a failed run. */
   rowCount?: number;
 }
+
+/** How a saved query becomes a dashboard tile. Mirrors queries.Chart in Go. */
+export type ChartType = 'line' | 'bar' | 'hbar' | 'number';
+export interface ChartSpec {
+  type: ChartType;
+  /** The label column; unused by `number`. */
+  x?: string;
+  /** The numeric value column. */
+  y: string;
+}
+
+/** A named query; one with a chart is a tile on the project's dashboard. */
+export interface SavedQuery {
+  id: string;
+  name: string;
+  sql: string;
+  chart?: ChartSpec;
+  updatedAt: string;
+}

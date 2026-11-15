@@ -10,6 +10,7 @@ import (
 	"github.com/AZURIIEAL/openscale/control-plane/internal/datasets"
 	"github.com/AZURIIEAL/openscale/control-plane/internal/pipelines"
 	"github.com/AZURIIEAL/openscale/control-plane/internal/projects"
+	"github.com/AZURIIEAL/openscale/control-plane/internal/queries"
 )
 
 const valid = `{
@@ -48,6 +49,9 @@ func TestParseRefuses(t *testing.T) {
 		"no steps": func(s string) string {
 			return strings.Replace(s, `"steps": [{"jobType": "validate", "params": {"dataset": "trips", "output": "trips_clean"}}]`, `"steps": []`, 1)
 		},
+		"bad query": func(s string) string {
+			return strings.Replace(s, `"pipelines": [`, `"queries": [{"name": "q", "sql": "drop table trips"}], "pipelines": [`, 1)
+		},
 		"bad name": func(s string) string { return strings.Replace(s, `"clean"`, `"Clean!"`, 1) },
 	}
 	for name, mutate := range cases {
@@ -68,11 +72,12 @@ func TestExportRoundTrip(t *testing.T) {
 		{Name: "upload", Layer: "bronze", Source: datasets.Source{Kind: datasets.SourceUpload}, Rules: json.RawMessage("[]")},
 	}
 	pls := []pipelines.Pipeline{{Name: "clean", Steps: []pipelines.Step{{JobType: "validate", Params: map[string]any{"dataset": "trips"}}}}}
-	b, err := Export(projects.Project{Slug: "demo", Name: "Demo"}, all, pls)
+	qs := []queries.Query{{Name: "n", SQL: "select count(*) as n from trips", Chart: &queries.Chart{Type: "number", Y: "n"}}}
+	b, err := Export(projects.Project{Slug: "demo", Name: "Demo"}, all, pls, qs)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(b.Datasets) != 1 {
+	if len(b.Datasets) != 1 || len(b.Queries) != 1 {
 		t.Errorf("uploaded datasets should be left out: %+v", b.Datasets)
 	}
 	raw, _ := json.Marshal(b)

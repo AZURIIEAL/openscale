@@ -75,7 +75,7 @@ export const NAV_ENTRIES: NavEntry[] = [
     path: 'dashboards',
     label: 'Dashboards',
     icon: DashboardsIcon,
-    subtitle: 'Metrics over the full ingested history.',
+    subtitle: 'Charts from the project\'s saved queries.',
     scope: 'project',
   },
   {

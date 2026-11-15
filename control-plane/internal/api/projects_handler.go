@@ -202,7 +202,12 @@ func (h *ProjectsHandler) Export(w http.ResponseWriter, r *http.Request) {
 		writeProjectErr(w, err)
 		return
 	}
-	b, err := bundle.Export(p, all, pls)
+	qs, err := h.db.ListSavedQueries(ctx, p.ID)
+	if err != nil {
+		writeProjectErr(w, err)
+		return
+	}
+	b, err := bundle.Export(p, all, pls, qs)
 	if err != nil {
 		writeProjectErr(w, err)
 		return

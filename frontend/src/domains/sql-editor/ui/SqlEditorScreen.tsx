@@ -8,6 +8,9 @@ import { useQueryHistory } from '../application/useQueryHistory';
 import { isQueryError } from '../domain/rules';
 import { CatalogPanel } from './CatalogPanel';
 import { QueryHistoryPanel } from './QueryHistoryPanel';
+import { SavedQueriesPanel } from './SavedQueriesPanel';
+import { SaveQueryBar } from './SaveQueryBar';
+import type { SavedQuery } from '../domain/entities';
 import { QueryEditor } from './QueryEditor';
 import { ResultsTable } from './ResultsTable';
 
@@ -48,6 +51,7 @@ export function SqlEditorScreen() {
       setSql((current) => (current.startsWith('-- Upload a dataset') ? defaultSql : current));
     }
   }, [target.legacy, firstTable, defaultSql]);
+  const [loaded, setLoaded] = useState<SavedQuery>();
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const runQuery = useRunQuery();
   const { entries, addEntry, clear } = useQueryHistory();
@@ -95,6 +99,12 @@ export function SqlEditorScreen() {
     <div className="grid grid-cols-1 gap-4 lg:grid-cols-[260px_1fr]">
       <div className="flex flex-col gap-4">
         <CatalogPanel onInsertTable={insertAtCursor} />
+        <SavedQueriesPanel
+          onSelect={(q) => {
+            setLoaded(q);
+            setSql(q.sql);
+          }}
+        />
         <QueryHistoryPanel entries={entries} onSelect={setSql} onClear={clear} />
       </div>
 
@@ -108,6 +118,9 @@ export function SqlEditorScreen() {
             pending={runQuery.isPending}
             textareaRef={textareaRef}
           />
+          <div className="mt-2">
+            <SaveQueryBar key={loaded?.id} sql={sql} columns={result?.columns ?? []} initial={loaded} />
+          </div>
         </Panel>
 
         {queryErrorMessage && (

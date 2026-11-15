@@ -140,11 +140,12 @@ embedded real service, not mock data. The caveats are the real limits.
 | **Projects** | Create, switch and archive projects; job history is per project; `/` remembers the last one | Pipelines, Dashboards and Streaming are still the taxi stages, so they only light up in the `nyc-taxi` sample |
 | **Datasets** | Upload a CSV/TSV/Parquet/JSON file (streamed to the lake) or give a URL; the worker converts it to Parquet, infers the schema and profiles every column | One Parquet part per dataset; CSV types are inferred, not reviewable yet |
 | **Quality rules** | Each dataset's Rules tab: SQL conditions that reject, quarantine, flag or just count rows, in priority order. Save checks every condition against the data; Test shows per rule how many rows match and would be removed. The `validate` job applies them, and the taxi Silver stage runs its ten rules the same way | |
-| **Project files** | The download icon next to the project switcher exports a project's definition (URL datasets with their rules, and pipelines) as JSON; **New project** imports one. [`samples/nyc_taxi/project.json`](samples/nyc_taxi/project.json) is the taxi lakehouse built only from generic jobs: import it, wait for `trips` and `zones` to fetch, then run its `taxi` pipeline (Silver, four Gold tables, a fare model; about a minute for January 2025) | No data in the file: uploaded datasets are left out, derived ones are rebuilt by running the pipelines |
+| **Project files** | The download icon next to the project switcher exports a project's definition (URL datasets with their rules, pipelines and saved queries) as JSON; **New project** imports one. [`samples/nyc_taxi/project.json`](samples/nyc_taxi/project.json) is the taxi lakehouse built only from generic jobs: import it, wait for `trips` and `zones` to fetch, then run its `taxi` pipeline (Silver, four Gold tables, a fare model; about a minute for January 2025) | No data in the file: uploaded datasets are left out, derived ones are rebuilt by running the pipelines |
+| **Saved queries and dashboards** | In the SQL Editor, name a query and save it; pick a chart (line, bars, ranked bars, number) with its x and y columns to put it on the project's **Dashboards** screen, which runs each tile's query when it opens. Saved queries travel in project files, so the taxi sample brings its dashboard | The `nyc-taxi` legacy project keeps its fixed dashboard until 4e-2 |
 | **SQL over the lake** | The SQL Editor runs DuckDB over a project's datasets (each a view named after it) through the internal `query-engine` service, with the S3 secret scoped to the project, local files disabled and a per-query timeout | The taxi sample still queries Postgres |
 
 **Not built yet:** branching pipelines and schedules,
-saved queries and dashboards for any project, scheduling, the assistant,
+scheduling, the assistant,
 and auth. See [`ideas/vision-and-roadmap.md`](ideas/vision-and-roadmap.md).
 
 ## Architecture

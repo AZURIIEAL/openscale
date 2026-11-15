@@ -13,8 +13,8 @@ session needs.
 | 1 Projects (`/p/{slug}`, `/api/projects/{p}`) | done | PR #1 |
 | 2 Datasets (upload / URL, fetch + ingest jobs) | done | PR #2 |
 | 3 Query engine (DuckDB service, project SQL) | done | PR #2 |
-| 4 Jobs, rules and pipelines as data; taxi → sample project | **in progress**: 4a–4e-1 done; 4e-2 (delete taxi code) waits for Phase 5, which is next | 4a: `phase-4a-job-registry`; 4b: `phase-4b-generic-jobs`; 4c: `phase-4c-rules-as-data`; 4d: `phase-4d-pipelines`; 4e-1: `phase-4e-taxi-sample` |
-| 5 Saved queries + dashboards; streaming passthrough | pending | — |
+| 4 Jobs, rules and pipelines as data; taxi → sample project | **in progress**: 4a–4e-1 done; 4e-2 (delete taxi code) waits for Phase 5 | 4a: `phase-4a-job-registry`; 4b: `phase-4b-generic-jobs`; 4c: `phase-4c-rules-as-data`; 4d: `phase-4d-pipelines`; 4e-1: `phase-4e-taxi-sample` |
+| 5 Saved queries + dashboards; streaming passthrough | **in progress**: 5a saved queries + dashboards done; 5b streaming next | 5a: `phase-5a-saved-queries` |
 | 6 MCP server with read-only tools | pending | — |
 | 7 Suggestions (heuristics, agent proposals, inbox) | pending | — |
 | 8 In-app assistant (Agent SDK, approvals) | pending | — |

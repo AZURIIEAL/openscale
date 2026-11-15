@@ -7,7 +7,7 @@ import { DataCatalogScreen } from '@/domains/data-catalog/ui/DataCatalogScreen';
 import { NotebooksScreen } from '@/domains/notebooks/ui/NotebooksScreen';
 import { MlWorkbenchScreen } from '@/domains/ml-workbench/ui/MlWorkbenchScreen';
 import { StreamingScreen } from '@/domains/streaming/ui/StreamingScreen';
-import { DashboardsScreen } from '@/domains/dashboards/ui/DashboardsScreen';
+import { DashboardsRoute } from '@/domains/dashboards/ui/DashboardsRoute';
 import { InfrastructureScreen } from '@/domains/system-health/ui/InfrastructureScreen';
 import { ConnectionsScreen } from '@/domains/connections/ui/ConnectionsScreen';
 import { FEATURE_LEGACY_TAXI } from '@/shared/project/entities';
@@ -59,15 +59,7 @@ export const router = createBrowserRouter([
           },
           {
             path: 'dashboards',
-            element: (
-              <RequireFeature
-                feature={FEATURE_LEGACY_TAXI}
-                screenName="Dashboards"
-                description="Dashboards are built from the taxi Gold tables today. Saved queries and chart tiles for any project come in Phase 5."
-              >
-                <DashboardsScreen />
-              </RequireFeature>
-            ),
+            element: <DashboardsRoute />,
           },
         ],
       },

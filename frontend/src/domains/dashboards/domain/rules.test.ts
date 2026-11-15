@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { formatCount, formatCurrency, formatDurationSeconds, formatHourLabel, formatPercent } from './rules';
+import { chartPoints, formatCount, formatCurrency, formatDurationSeconds, formatHourLabel, formatPercent } from './rules';
 
 describe('formatCurrency', () => {
   it('scales to K and M', () => {
@@ -44,5 +44,19 @@ describe('formatDurationSeconds', () => {
     expect(formatDurationSeconds(42.4)).toBe('42s');
     expect(formatDurationSeconds(125)).toBe('2m 5s');
     expect(formatDurationSeconds(undefined)).toBe('—');
+  });
+});
+
+describe('chartPoints', () => {
+  const result = { columns: ['day', 'n'], rows: [['a', 1], ['b', '2.5'], ['c', null], ['d', 'x']] };
+  it('maps x and y, dropping non-numeric values', () => {
+    expect(chartPoints(result, { x: 'day', y: 'n' })).toEqual([
+      { label: 'a', value: 1 },
+      { label: 'b', value: 2.5 },
+    ]);
+  });
+  it('names a missing column', () => {
+    expect(() => chartPoints(result, { x: 'hour', y: 'n' })).toThrow('"hour"');
+    expect(() => chartPoints(result, { y: 'total' })).toThrow('"total"');
   });
 });
