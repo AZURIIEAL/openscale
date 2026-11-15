@@ -35,7 +35,21 @@ func (d *Dispatcher) Dispatch(ctx context.Context, projectID, jobType string, pa
 	if err != nil {
 		return jobs.Run{}, err
 	}
+	return d.enqueue(ctx, run, params), nil
+}
 
+// DispatchStep queues one step of a running pipeline run. ok is false when
+// nothing was queued: the run stopped, or the step already has its job.
+func (d *Dispatcher) DispatchStep(ctx context.Context, pipelineRunID string, stepIndex int, jobType string, params []byte) (jobs.Run, bool, error) {
+	run, ok, err := d.db.InsertStepJobRun(ctx, pipelineRunID, stepIndex, jobType, params)
+	if err != nil || !ok {
+		return run, ok, err
+	}
+	return d.enqueue(ctx, run, params), true, nil
+}
+
+// enqueue puts an inserted run on the Redis stream.
+func (d *Dispatcher) enqueue(ctx context.Context, run jobs.Run, params []byte) jobs.Run {
 	var paramsMap map[string]any
 	if err := json.Unmarshal(params, &paramsMap); err != nil || paramsMap == nil {
 		paramsMap = map[string]any{}
@@ -44,18 +58,18 @@ func (d *Dispatcher) Dispatch(ctx context.Context, projectID, jobType string, pa
 	paramsMap["project_id"] = run.ProjectID
 	enqueueParams, err := json.Marshal(paramsMap)
 	if err != nil {
-		return d.failRun(ctx, run, "failed to encode enqueue params: "+err.Error()), nil
+		return d.failRun(ctx, run, "failed to encode enqueue params: "+err.Error())
 	}
 
 	if err := d.redis.EnqueueJob(ctx, redis.JobRequest{
 		JobID:       run.ID,
-		JobType:     jobType,
+		JobType:     run.JobType,
 		Params:      enqueueParams,
 		SubmittedAt: run.SubmittedAt.Format(time.RFC3339),
 	}); err != nil {
-		return d.failRun(ctx, run, "failed to enqueue: "+err.Error()), nil
+		return d.failRun(ctx, run, "failed to enqueue: "+err.Error())
 	}
-	return run, nil
+	return run
 }
 
 // failRun records an enqueue failure on the already-inserted row and

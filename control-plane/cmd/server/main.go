@@ -81,7 +81,10 @@ func main() {
 
 	engine := queryengine.NewClient(cfg.QueryEngineURL)
 
-	router := api.NewRouter(watcher, database, redisClient, wsHandler, streamingClient, streamHub, lakeClient, engine, m, cfg.FrontendOrigin, cfg.MaxUploadBytes)
+	orchestrator := api.NewOrchestrator(database, api.NewDispatcher(database, redisClient), logger)
+	go orchestrator.Run(ctx)
+
+	router := api.NewRouter(watcher, database, redisClient, wsHandler, streamingClient, streamHub, lakeClient, engine, orchestrator, m, cfg.FrontendOrigin, cfg.MaxUploadBytes)
 
 	srv := &http.Server{
 		Addr:              ":" + cfg.Port,

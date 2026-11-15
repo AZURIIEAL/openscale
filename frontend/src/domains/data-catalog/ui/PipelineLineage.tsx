@@ -3,9 +3,12 @@ import { Well } from '@/shared/design-system/Well';
 import { StatusPill } from '@/shared/design-system/StatusPill';
 import { useJobRunsPage } from '@/domains/pipelines/application/useJobRuns';
 import { useJobCatalog } from '@/domains/pipelines/application/useJobCatalog';
-import { PIPELINE_ORDER } from '@/domains/pipelines/application/useRunAllJobs';
 import type { JobDefinition } from '@/domains/pipelines/domain/entities';
 import type { JobRun, JobState } from '@/domains/pipelines/domain/entities';
+
+/** The taxi stages in dependency order (the seeded `taxi` pipeline's steps);
+ * Phase 4e replaces this view with dataset lineage. */
+const PIPELINE_ORDER = ['ingest', 'silver', 'gold', 'features', 'fare_model'] as const;
 
 const RUN_STATUS_MAP: Record<JobState, { status: 'good' | 'warn' | 'crit'; label: string }> = {
   succeeded: { status: 'good', label: 'Succeeded' },

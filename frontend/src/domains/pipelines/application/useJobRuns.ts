@@ -21,7 +21,8 @@ export function useJobRunsPage(page: number) {
     queryKey: [...runsQueryKey(slug), page],
     queryFn: () => gateway.fetchRuns(slug, { limit: RUNS_PAGE_SIZE, offset: page * RUNS_PAGE_SIZE }),
     enabled: slug !== '',
-    refetchInterval: 10_000,
+    // Quick while something runs, so a pipeline's next step shows up promptly.
+    refetchInterval: (query) => (query.state.data?.runs.some((r) => r.state === 'queued' || r.state === 'running') ? 2_000 : 10_000),
   });
 }
 

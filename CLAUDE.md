@@ -13,7 +13,7 @@ session needs.
 | 1 Projects (`/p/{slug}`, `/api/projects/{p}`) | done | PR #1 |
 | 2 Datasets (upload / URL, fetch + ingest jobs) | done | PR #2 |
 | 3 Query engine (DuckDB service, project SQL) | done | PR #2 |
-| 4 Jobs, rules and pipelines as data; taxi → sample project | **in progress**: 4a–4c done; 4d next | 4a: `phase-4a-job-registry`; 4b: `phase-4b-generic-jobs`; 4c: `phase-4c-rules-as-data` |
+| 4 Jobs, rules and pipelines as data; taxi → sample project | **in progress**: 4a–4d done; 4e next | 4a: `phase-4a-job-registry`; 4b: `phase-4b-generic-jobs`; 4c: `phase-4c-rules-as-data`; 4d: `phase-4d-pipelines` |
 | 5 Saved queries + dashboards; streaming passthrough | pending | — |
 | 6 MCP server with read-only tools | pending | — |
 | 7 Suggestions (heuristics, agent proposals, inbox) | pending | — |
@@ -33,6 +33,9 @@ Milestone 1 ("upload a CSV and query it") is complete on `main`.
   (`period_year`, `period_month`). The editor's Test runs without them, so such rules show 0 hits there.
 - The taxi `train` job is now `fare_model` (migration 0008 renamed its run history);
   Dashboards' model-quality queries read `fare_model` until Phase 5 replaces them.
+- Pipelines are linear and only the first step takes run-time params (`POST .../pipelines/{name}/run`
+  with `{"params": {...}}`). The orchestrator assumes one control-plane process (see its shortcut note).
+- The taxi pipeline is seeded by migration 0009 until 4e moves it into `project.json`.
 - `replay` spends about 85 s in Spark loading all of Silver before its first send. A
   cancel during that load waits out the runner's 5 s grace and is then terminated, which
   is fine, but it makes the Streaming screen slow to start. Phase 5 replaces it.
@@ -86,8 +89,9 @@ Slices, in order (each a PR): ~~**4a** job registry~~ (done: `@job` in `worker/r
 `validate` / `sql_transform` / `train` job types (done: rule engine in `libs/openscale/rules.py`,
 derived datasets with lineage in `source`, `requires_feature` on jobs) → ~~**4c**~~ rules as data (done:
 `PUT`/`POST .../datasets/{name}/rules[/test]`, the dataset page's Rules tab, the taxi Silver job runs
-`silver_rules.json` through the shared engine, golden check 13/13 months) → **4d** `pipelines` / `pipeline_runs` tables and a
-server-side orchestrator that reconciles from Postgres → **4e** `samples/nyc_taxi/project.json`,
+`silver_rules.json` through the shared engine, golden check 13/13 months) → ~~**4d**~~ pipelines (done: `pipelines` /
+`pipeline_runs` tables, `job_runs.pipeline_run_id`/`step_index`, `internal/pipelines` decides each step, `api/orchestrator.go`
+reconciles from Postgres every 2 s, the Pipelines screen's `PipelinesPanel`; Run All is gone) → **4e** `samples/nyc_taxi/project.json`,
 import/export, delete the taxi code and the `legacy_taxi` flag.
 
 ## Conventions
