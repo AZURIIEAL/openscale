@@ -47,6 +47,7 @@ worker/          Python job runner (Redis stream). Each jobs/*.py registers @job
                  with pandas only (test_runner starts real child processes; Linux/macOS).
 query-engine/    FastAPI + DuckDB. query_engine/session.py is the sandbox; tests need duckdb.
 libs/openscale/  Shared Python: lake paths, DuckDB connect/lockdown, readers, url_check, ingest.
+gateway/         Caddy for deployments (docker-compose.deploy.yml): built frontend + every UI on one origin.
 frontend/        React + Vite. domains/<name>/{domain,application,infrastructure,ui};
                  shared/project/ owns the current project; shared/layout/navigation.ts is the nav source of truth.
 ```
@@ -57,6 +58,9 @@ frontend/        React + Vite. domains/<name>/{domain,application,infrastructure
 - **Rows, not code.** Rules, transforms, charts and pipelines are data. A new Go struct or Python
   module per user artefact means it is not generic yet.
 - **Browser → control-plane only.** `query-engine` and the future `assistant` have no host port.
+- **Same origin, no `localhost`.** The browser uses paths on the page's own origin (`/api`, `/mlflow/`,
+  `/jupyter/`, `/grafana/`, `/prometheus/`); `frontend/vite.config.ts` and `gateway/Caddyfile` route them.
+  A new UI-facing service gets a route in both.
 - **Agent reads freely, proposes writes.** Anything destructive waits for a person.
 - **Taxi keeps working until Phase 4 replaces it.** It is the `nyc-taxi` project with the
   `legacy_taxi` feature flag; `RequireFeature` gates its screens.
@@ -65,6 +69,7 @@ frontend/        React + Vite. domains/<name>/{domain,application,infrastructure
 ## Commands
 ```bash
 docker compose up -d --build                      # whole stack; migrations run on control-plane start
+docker compose -f docker-compose.yml -f docker-compose.deploy.yml up -d --build   # deployed: gateway on :80, needs .env
 cd control-plane && go vet ./... && go test ./...
 cd worker && pip install -e ../libs/openscale && python -m pytest
 cd libs/openscale && python -m pytest ; cd ../../query-engine && python -m pytest

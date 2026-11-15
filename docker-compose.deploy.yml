@@ -1,0 +1,77 @@
+# Deploying OpenScale where other people can reach it (a cloud VM, a home
+# server). Layer this on top of the main file:
+#
+#   cp .env.example .env        # then set OPENSCALE_PASSWORD
+#   docker compose -f docker-compose.yml -f docker-compose.deploy.yml up -d --build
+#
+# What changes from local development:
+# - `gateway` (Caddy) is the only service listening on the network: port 80,
+#   or 80 + 443 with automatic HTTPS when OPENSCALE_SITE is a domain. It
+#   serves a production build of the frontend and proxies the API, MLflow,
+#   Jupyter, Grafana and Prometheus under one origin, behind one password.
+# - Every other published port is bound to 127.0.0.1, so Postgres, Redis,
+#   MinIO, Kafka and the raw service ports are reachable only from the
+#   machine itself (or through an SSH tunnel), never from the internet.
+# - The Vite dev server doesn't run.
+
+services:
+  gateway:
+    build:
+      context: ./frontend
+      dockerfile: ../gateway/Dockerfile
+      additional_contexts:
+        gateway: ./gateway
+    image: openscale-gateway
+    container_name: openscale-gateway
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      OPENSCALE_SITE: ${OPENSCALE_SITE:-:80}
+      OPENSCALE_USER: ${OPENSCALE_USER:-openscale}
+      OPENSCALE_PASSWORD: ${OPENSCALE_PASSWORD:?set OPENSCALE_PASSWORD in .env}
+    volumes:
+      # Let's Encrypt certificates and account keys, kept across restarts.
+      - gateway-data:/data
+    depends_on:
+      - control-plane
+    restart: unless-stopped
+
+  frontend:
+    profiles: ["dev"]
+
+  minio:
+    ports: !override
+      - "127.0.0.1:9000:9000"
+      - "127.0.0.1:9101:9001"
+  kafka:
+    ports: !override
+      - "127.0.0.1:29092:29092"
+  postgres:
+    ports: !override
+      - "127.0.0.1:5432:5432"
+  redis:
+    ports: !override
+      - "127.0.0.1:6379:6379"
+  prometheus:
+    ports: !override
+      - "127.0.0.1:9090:9090"
+  grafana:
+    ports: !override
+      - "127.0.0.1:3000:3000"
+    environment:
+      # Only takes effect when Grafana's database is first created.
+      GF_SECURITY_ADMIN_PASSWORD: ${OPENSCALE_PASSWORD}
+  control-plane:
+    ports: !override
+      - "127.0.0.1:8080:8080"
+  jupyter:
+    ports: !override
+      - "127.0.0.1:8888:8888"
+  mlflow:
+    ports: !override
+      - "127.0.0.1:5000:5000"
+
+volumes:
+  gateway-data:

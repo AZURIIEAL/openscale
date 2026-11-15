@@ -4,6 +4,7 @@ global:
 # Every target is a compose service name on the shared "openscale" network.
 scrape_configs:
   - job_name: prometheus
+    metrics_path: /prometheus/metrics # served under /prometheus/ (docker-compose.yml)
     static_configs:
       - targets: ["localhost:9090"]
 

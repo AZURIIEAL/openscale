@@ -1,0 +1,77 @@
+# The one public entry point when OpenScale is deployed
+# (docker-compose.deploy.yml). It serves the built frontend and puts every
+# web UI the app links to under the same origin, so the browser never needs
+# another port and nothing depends on "localhost":
+#
+#   /             the React app (static build, SPA fallback)
+#   /api/         control-plane (REST + WebSockets)
+#   /mlflow/      MLflow UI          /jupyter/     JupyterLab
+#   /grafana/     Grafana            /prometheus/  Prometheus
+#
+# Everything sits behind one password (OPENSCALE_USER / OPENSCALE_PASSWORD,
+# hashed by entrypoint.sh) until Phase 9 adds real accounts: the app has
+# no login of its own, and Jupyter alone is a shell on the server.
+{
+	admin off
+}
+
+# ":80" serves plain HTTP on any host name or IP (put Cloudflare or another
+# TLS proxy in front). A domain such as openscale.example.com makes Caddy
+# fetch and renew a Let's Encrypt certificate and serve HTTPS on 443.
+{$OPENSCALE_SITE::80} {
+	basic_auth {
+		{$OPENSCALE_USER:openscale} {$OPENSCALE_PASSWORD_HASH}
+	}
+	encode zstd gzip
+
+	# header_up -Authorization: the gateway's Basic credentials are for the
+	# gateway only. Grafana in particular would try them as a Grafana login
+	# and answer 401.
+	handle /api/* {
+		reverse_proxy control-plane:8080 {
+			header_up -Authorization
+		}
+	}
+
+	# MLflow serves its UI with relative links, so it can live under a
+	# prefix that is stripped here. Its DNS-rebinding guard only accepts
+	# local Host headers.
+	redir /mlflow /mlflow/
+	handle_path /mlflow/* {
+		reverse_proxy mlflow:5000 {
+			header_up Host localhost:5000
+			header_up -Authorization
+		}
+	}
+
+	# Jupyter, Grafana and Prometheus are configured to serve from these
+	# prefixes themselves (docker-compose.yml), so paths pass through as-is.
+	redir /jupyter /jupyter/
+	handle /jupyter/* {
+		reverse_proxy jupyter:8888 {
+			header_up -Authorization
+		}
+	}
+	redir /grafana /grafana/
+	handle /grafana/* {
+		reverse_proxy grafana:3000 {
+			header_up -Authorization
+		}
+	}
+	redir /prometheus /prometheus/
+	handle /prometheus/* {
+		reverse_proxy prometheus:9090 {
+			header_up -Authorization
+		}
+	}
+
+	handle {
+		root * /srv
+		# Hashed file names: cache forever. index.html: always revalidate,
+		# so a redeploy shows up on the next load.
+		header /assets/* Cache-Control "public, max-age=31536000, immutable"
+		header / Cache-Control "no-cache"
+		try_files {path} /index.html
+		file_server
+	}
+}

@@ -31,19 +31,24 @@ npm run dev        # http://localhost:5173
 
 ### Environment
 
-These are read at build/dev time and inlined into the bundle, so they're
-the URLs **the browser** uses. They stay `localhost` even when the
-frontend itself runs in a container.
+The `VITE_` vars are read at build/dev time and inlined into the bundle,
+so they're the URLs **the browser** uses. By default every one is a path on
+the page's own origin: the dev server ([`vite.config.ts`](vite.config.ts))
+and the deploy gateway ([`../gateway/Caddyfile`](../gateway/Caddyfile))
+proxy `/api`, `/mlflow/`, `/jupyter/`, `/grafana/` and `/prometheus/` to
+their services. That's what makes the console work from another machine.
 
 | Var | Default | Used by |
 |---|---|---|
-| `VITE_API_BASE_URL` | `http://localhost:8080` | every HTTP gateway and WebSocket ([`src/shared/api/httpClient.ts`](src/shared/api/httpClient.ts)) |
-| `VITE_MLFLOW_BASE_URL` | `http://localhost:5000` | ML Workbench iframe |
-| `VITE_JUPYTER_BASE_URL` | `http://localhost:8888` | Notebooks iframe |
+| `VITE_API_BASE_URL` | empty (same origin) | every HTTP gateway and WebSocket ([`src/shared/api/httpClient.ts`](src/shared/api/httpClient.ts)); leave empty to go through the dev server's `/api` proxy |
+| `OPENSCALE_PROXY_HOSTS` | unset (`localhost`) | not inlined: where the dev proxy finds the services. `compose` (set in `docker-compose.yml`) uses the compose service names |
+| `VITE_MLFLOW_BASE_URL` | `/mlflow/` | ML Workbench iframe |
+| `VITE_JUPYTER_BASE_URL` | `/jupyter` | Notebooks iframe |
 | `VITE_JUPYTER_TOKEN` | `openscale-dev` | Notebooks iframe |
 
-If you change the frontend's origin, also update the control-plane's
-`FRONTEND_ORIGIN`, which it uses for CORS and the WebSocket origin check.
+`FRONTEND_ORIGIN` on the control-plane only matters if you point
+`VITE_API_BASE_URL` at a different origin: same-origin requests need no
+CORS, and the WebSocket origin check accepts the page's own host.
 
 ## Structure
 

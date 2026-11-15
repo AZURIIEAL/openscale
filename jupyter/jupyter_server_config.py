@@ -1,5 +1,7 @@
-# Allows the OpenScale frontend (a different origin) to embed this server
-# in an <iframe>. Jupyter Server's default clickjacking protection
+# The console reaches Jupyter through its own origin (/jupyter/, proxied by
+# the dev server and the deploy gateway), so 'self' covers the embed; the
+# localhost:5173 entry keeps a direct http://localhost:8888 setup working.
+# Allows the OpenScale frontend to embed this server in an <iframe>. Jupyter Server's default clickjacking protection
 # (X-Frame-Options / frame-ancestors 'self') blocks cross-origin iframing
 # otherwise -- this is the actual mechanism that makes the Notebooks
 # screen's embed work, not anything on the Vite/frontend side.
