@@ -32,14 +32,27 @@ def convert_to_parquet(con: duckdb.DuckDBPyConnection, raw_files: list[str], dat
     """Reads every raw file (schemas unioned by name), writes one Parquet
     file, and returns the inferred columns and row count. DuckDB streams
     the conversion, so a file larger than memory still converts."""
-    select = union_sql(raw_files)
-    con.execute(f"COPY ({select}) TO '{data_part}' (FORMAT PARQUET, COMPRESSION ZSTD)")
+    result = write_parquet(con, union_sql(raw_files), data_part)
+    result.files = list(raw_files)
+    return result
+
+
+def write_parquet(con: duckdb.DuckDBPyConnection, select_sql: str, out_path: str) -> IngestResult:
+    """Streams one SELECT into a Parquet file and reads back its columns and
+    row count. Shared by ingest and by the jobs that write derived datasets
+    (validate, sql_transform)."""
+    con.execute(f"COPY ({select_sql}) TO '{out_path}' (FORMAT PARQUET, COMPRESSION ZSTD)")
+    return describe_parquet(con, out_path)
+
+
+def describe_parquet(con: duckdb.DuckDBPyConnection, pattern: str) -> IngestResult:
+    """Columns and row count of the Parquet file(s) matching pattern."""
     columns = [
         {"name": name, "type": typ}
-        for name, typ, *_ in con.execute(f"DESCRIBE SELECT * FROM read_parquet('{data_part}')").fetchall()
+        for name, typ, *_ in con.execute(f"DESCRIBE SELECT * FROM read_parquet('{pattern}')").fetchall()
     ]
-    row_count = con.execute(f"SELECT COUNT(*) FROM read_parquet('{data_part}')").fetchone()[0]
-    return IngestResult(columns=columns, row_count=int(row_count), files=list(raw_files))
+    row_count = con.execute(f"SELECT COUNT(*) FROM read_parquet('{pattern}')").fetchone()[0]
+    return IngestResult(columns=columns, row_count=int(row_count))
 
 
 def _jsonable(v: Any) -> Any:

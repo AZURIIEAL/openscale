@@ -151,6 +151,7 @@ def _sleep_unless_cancelled(r, control_key: str | None, seconds: float) -> None:
     ],
     # Started from the Streaming screen's replay controls, not the run list.
     listed=False,
+    requires_feature="legacy_taxi",
 )
 def replay(ctx: JobContext) -> None:
     """rows is the count of trips actually sent to Kafka. Fails if there is

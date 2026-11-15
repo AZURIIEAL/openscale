@@ -27,6 +27,19 @@ const mixedSchema = `[
   {"name": "input", "type": "dataset", "label": "Input dataset", "required": true}
 ]`
 
+// What the worker publishes for the generic train and sql_transform jobs.
+const trainSchema = `[
+  {"name": "dataset", "type": "dataset", "label": "Dataset", "required": true},
+  {"name": "target", "type": "column", "label": "Target column", "required": true, "of": "dataset"},
+  {"name": "features", "type": "columns", "label": "Feature columns", "of": "dataset"},
+  {"name": "task", "type": "enum", "label": "Task", "options": ["regression", "classification"], "default": "regression"}
+]`
+
+const transformSchema = `[
+  {"name": "output", "type": "dataset_name", "label": "Output dataset", "required": true},
+  {"name": "sql", "type": "text", "label": "SQL", "required": true}
+]`
+
 func definition(t *testing.T, jobType, schema string) Definition {
 	t.Helper()
 	var specs []ParamSpec
@@ -68,6 +81,18 @@ func TestValidateParams(t *testing.T) {
 		{"string as number", mixedSchema, `{"note": 3, "input": "trips"}`, "note must be a string"},
 		{"dataset name rules", mixedSchema, `{"input": "Trips 2024"}`, "input must be a dataset name"},
 		{"dataset required", mixedSchema, `{}`, "input is required"},
+
+		{"train full", trainSchema, `{"dataset": "trips", "target": "fare", "features": ["distance", "zone"], "task": "regression"}`, ""},
+		{"train default features", trainSchema, `{"dataset": "trips", "target": "fare"}`, ""},
+		{"train empty feature list is unset", trainSchema, `{"dataset": "trips", "target": "fare", "features": []}`, ""},
+		{"train missing target", trainSchema, `{"dataset": "trips"}`, "target is required"},
+		{"train features not a list", trainSchema, `{"dataset": "trips", "target": "fare", "features": "distance"}`, "features must be a list"},
+		{"train duplicate feature", trainSchema, `{"dataset": "trips", "target": "fare", "features": ["a", "a"]}`, "lists \"a\" twice"},
+		{"train blank feature", trainSchema, `{"dataset": "trips", "target": "fare", "features": [""]}`, "features must be a list"},
+
+		{"transform ok", transformSchema, `{"output": "zone_totals", "sql": "SELECT zone, count(*) FROM trips GROUP BY 1"}`, ""},
+		{"transform bad output name", transformSchema, `{"output": "Zone Totals", "sql": "SELECT 1"}`, "output must be a dataset name"},
+		{"transform sql not a string", transformSchema, `{"output": "z", "sql": 42}`, "sql must be a string"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -116,5 +141,31 @@ func TestParseParams(t *testing.T) {
 		if _, err := ParseParams([]byte(body)); !errors.Is(err, ErrInvalidParams) {
 			t.Errorf("ParseParams(%q) should be ErrInvalidParams, got %v", body, err)
 		}
+	}
+}
+
+func TestCheckAvailable(t *testing.T) {
+	taxiOnly := Definition{Type: "ingest", RequiresFeature: "legacy_taxi"}
+	generic := Definition{Type: "validate"}
+	has := func(features ...string) func(string) bool {
+		return func(key string) bool {
+			for _, f := range features {
+				if f == key {
+					return true
+				}
+			}
+			return false
+		}
+	}
+
+	if err := taxiOnly.CheckAvailable(has("legacy_taxi")); err != nil {
+		t.Fatalf("taxi job in the taxi project: %v", err)
+	}
+	err := taxiOnly.CheckAvailable(has())
+	if !errors.Is(err, ErrUnavailable) || !strings.Contains(err.Error(), `"legacy_taxi"`) {
+		t.Fatalf("taxi job elsewhere: want ErrUnavailable naming the feature, got %v", err)
+	}
+	if err := generic.CheckAvailable(has()); err != nil {
+		t.Fatalf("generic job: %v", err)
 	}
 }

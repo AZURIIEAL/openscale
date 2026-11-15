@@ -48,8 +48,28 @@ def test_job_registers_a_catalog_entry():
             ],
             "listed": True,
             "sort_order": 10,
+            "requires_feature": None,
         }
     ]
+
+
+def test_column_params_point_at_a_dataset_param():
+    job(
+        "train",
+        "Train",
+        "",
+        params_schema=[
+            Param("dataset", "dataset", "Dataset", required=True),
+            Param("target", "column", "Target", required=True, of="dataset"),
+            Param("features", "columns", "Features", of="dataset"),
+            Param("output", "dataset_name", "Output"),
+            Param("sql", "text", "SQL"),
+        ],
+        requires_feature="legacy_taxi",
+    )(lambda ctx: None)
+    entry = registry.catalog()[0]
+    assert entry["requires_feature"] == "legacy_taxi"
+    assert [p.get("of") for p in entry["params_schema"]] == [None, "dataset", "dataset", None, None]
 
 
 def test_catalog_sorts_by_order_then_type():
@@ -81,6 +101,10 @@ def test_job_type_must_be_an_identifier(bad_type):
         ([Param("a", "month", "A"), Param("b", "date", "B", gte="a")], "same ordered type"),
         ([Param("a", "string", "A"), Param("a", "string", "A again")], "duplicate"),
         ([Param("has space", "string", "A")], "identifier"),
+        ([Param("c", "column", "C")], "of must name an earlier dataset"),
+        ([Param("c", "columns", "C", of="d"), Param("d", "dataset", "D")], "of must name an earlier dataset"),
+        ([Param("s", "string", "S"), Param("c", "column", "C", of="s")], "of must name an earlier dataset"),
+        ([Param("d", "dataset", "D"), Param("n", "integer", "N", of="d")], "only column and columns take of"),
     ],
 )
 def test_invalid_schemas_fail_at_registration(schema, message):

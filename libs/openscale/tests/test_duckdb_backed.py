@@ -10,7 +10,7 @@ duckdb = pytest.importorskip("duckdb")
 
 from openscale.duck import DatasetView, attach_views, lockdown, quote_ident  # noqa: E402
 from openscale.ingest import convert_to_parquet, files_size_bytes, list_raw_files, profile  # noqa: E402
-from openscale.sqlguard import RejectedSQL, check_single_select  # noqa: E402
+from openscale.sqlguard import RejectedSQL, check_single_select, referenced_tables  # noqa: E402
 
 
 @pytest.fixture
@@ -118,3 +118,18 @@ def test_lockdown_blocks_local_files_and_config_changes(con, raw_dir):
         con.execute(f"SELECT * FROM read_csv('{raw_dir / 'a.csv'}')").fetchall()
     with pytest.raises(duckdb.Error):
         con.execute("SET disabled_filesystems = ''")
+
+
+def test_referenced_tables_reads_the_parse_tree(con):
+    sql = (
+        'WITH t AS (SELECT * FROM trips) SELECT z.name, count(*) FROM t JOIN zones z USING (zone_id) '
+        'WHERE x IN (SELECT id FROM "Weird Name") GROUP BY 1'
+    )
+    # no tables exist: parsing alone is enough; the CTE name comes back too
+    assert referenced_tables(con, sql) == {"trips", "zones", "Weird Name", "t"}
+
+
+def test_referenced_tables_rejects_unparseable_sql(con):
+    with pytest.raises(RejectedSQL):
+        referenced_tables(con, "SELEC 1")
+

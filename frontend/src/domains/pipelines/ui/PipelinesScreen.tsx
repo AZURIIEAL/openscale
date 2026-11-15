@@ -5,6 +5,7 @@ import { Well } from '@/shared/design-system/Well';
 import { RunButton } from '@/shared/design-system/RunButton';
 import { Spinner } from '@/shared/design-system/Spinner';
 import { StatusPill } from '@/shared/design-system/StatusPill';
+import { FEATURE_LEGACY_TAXI, hasFeature, useCurrentProject } from '@/shared/project';
 import { listedJobs } from '../domain/rules';
 import { useCancelAllRuns, useClearRuns, useJobRunsPage } from '../application/useJobRuns';
 import { useJobCatalog } from '../application/useJobCatalog';
@@ -31,8 +32,12 @@ interface PipelinesNavState {
 
 export function PipelinesScreen() {
   const navState = useLocation().state as PipelinesNavState | null;
+  const { project } = useCurrentProject();
   const catalogQuery = useJobCatalog();
-  const jobs = listedJobs(catalogQuery.data ?? []);
+  const jobs = listedJobs(catalogQuery.data ?? [], (feature) => hasFeature(project, feature));
+  // Run All and Clear data drive the fixed taxi chain; Phase 4d replaces
+  // them with pipelines any project can define.
+  const taxi = hasFeature(project, FEATURE_LEGACY_TAXI);
   // Run All's date-range prompt is ingest's own form.
   const ingestSchema = catalogQuery.data?.find((job) => job.type === 'ingest')?.paramsSchema ?? [];
   const [historyPage, setHistoryPage] = useState(0);
@@ -71,7 +76,8 @@ export function PipelinesScreen() {
           <div>
             <h3 style={{ margin: 0, fontSize: 18, fontWeight: 700, letterSpacing: '-0.015em', color: 'var(--text-heading)' }}>Job Catalog</h3>
             <p style={{ margin: '6px 0 0', fontSize: 14, color: 'var(--text-muted)' }}>
-              {jobs.length} {jobs.length === 1 ? 'job' : 'jobs'}, run individually or as a chain
+              {jobs.length} {jobs.length === 1 ? 'job' : 'jobs'}
+              {taxi ? ', run individually or as a chain' : ''}
             </p>
           </div>
           <div className="flex items-center gap-3">
@@ -105,15 +111,17 @@ export function PipelinesScreen() {
                 {cancelAllRuns.isPending ? 'Stopping…' : 'Stop all'}
               </button>
             )}
-            <RunButton
-              disabled={runAllActive || isPending}
-              onClick={() => {
-                setOpenJobType(null);
-                setRunAllFormOpen((open) => !open);
-              }}
-            >
-              {runAllFormOpen ? 'Cancel' : 'Run all'}
-            </RunButton>
+            {taxi && (
+              <RunButton
+                disabled={runAllActive || isPending}
+                onClick={() => {
+                  setOpenJobType(null);
+                  setRunAllFormOpen((open) => !open);
+                }}
+              >
+                {runAllFormOpen ? 'Cancel' : 'Run all'}
+              </RunButton>
+            )}
           </div>
         </header>
 
@@ -256,9 +264,11 @@ export function PipelinesScreen() {
           })}
         </div>
 
-        <div className="mt-4 flex items-center justify-end">
-          <ClearDataButton onRunStarted={setSelectedRunId} />
-        </div>
+        {taxi && (
+          <div className="mt-4 flex items-center justify-end">
+            <ClearDataButton onRunStarted={setSelectedRunId} />
+          </div>
+        )}
       </Panel>
 
       {selectedRunId && <JobRunLogPanel jobId={selectedRunId} />}

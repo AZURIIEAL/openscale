@@ -164,12 +164,12 @@ type TrainMetricPoint struct {
 	R2         *float64  `json:"r2"`
 }
 
-// ListTrainMetrics returns every succeeded train run's logged mae/rmse/r2,
+// ListTrainMetrics returns every succeeded fare_model run's logged mae/rmse/r2,
 // chronological, for the "model quality over retrains" chart.
 func (d *DB) ListTrainMetrics(ctx context.Context, projectID string) ([]TrainMetricPoint, error) {
 	rows, err := d.pool.Query(ctx,
 		`SELECT finished_at, metrics FROM control_plane.job_runs
-		 WHERE project_id = $1::uuid AND job_type = 'train' AND status = 'succeeded' AND metrics IS NOT NULL
+		 WHERE project_id = $1::uuid AND job_type = 'fare_model' AND status = 'succeeded' AND metrics IS NOT NULL
 		 ORDER BY finished_at`,
 		projectID,
 	)
@@ -298,12 +298,12 @@ func (d *DB) LatestSilverRowsProcessed(ctx context.Context, projectID string) (*
 	return rowsProcessed, nil
 }
 
-// LatestFareModelMae returns the most recent succeeded train run's MAE.
+// LatestFareModelMae returns the most recent succeeded fare_model run's MAE.
 func (d *DB) LatestFareModelMae(ctx context.Context, projectID string) (*float64, error) {
 	var raw []byte
 	err := d.pool.QueryRow(ctx,
 		`SELECT metrics FROM control_plane.job_runs
-		 WHERE project_id = $1::uuid AND job_type = 'train' AND status = 'succeeded' AND metrics IS NOT NULL
+		 WHERE project_id = $1::uuid AND job_type = 'fare_model' AND status = 'succeeded' AND metrics IS NOT NULL
 		 ORDER BY finished_at DESC LIMIT 1`,
 		projectID,
 	).Scan(&raw)

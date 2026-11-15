@@ -16,11 +16,16 @@ import (
 // the run handler maps it to 400.
 var ErrInvalidParams = errors.New("invalid job params")
 
+// ErrUnavailable: the job needs a project feature flag the project lacks
+// (the taxi stages need legacy_taxi).
+var ErrUnavailable = errors.New("job not available in this project")
+
 // ParamSpec is one field of a job's params schema, exactly as the worker
 // publishes it from its @job registry (worker/registry.py's Param). Min and
 // Max are numbers for number/integer fields and "YYYY-MM-DD"/"YYYY-MM"
 // strings for date/month fields. Gte names an earlier field this one must
-// be greater than or equal to.
+// be greater than or equal to. Of names the dataset field a column/columns
+// field picks from.
 type ParamSpec struct {
 	Name        string   `json:"name"`
 	Type        string   `json:"type"`
@@ -32,6 +37,7 @@ type ParamSpec struct {
 	Min         any      `json:"min,omitempty"`
 	Max         any      `json:"max,omitempty"`
 	Gte         string   `json:"gte,omitempty"`
+	Of          string   `json:"of,omitempty"`
 }
 
 // Definition is one job type from control_plane.job_definitions: the job
@@ -45,6 +51,16 @@ type Definition struct {
 	// Listed is false for jobs another screen or API queues (replay, reset,
 	// dataset jobs); they're kept out of the Pipelines run list.
 	Listed bool `json:"listed"`
+	// RequiresFeature, when set, is a project feature flag the job needs.
+	RequiresFeature string `json:"requiresFeature,omitempty"`
+}
+
+// CheckAvailable refuses a job whose required feature the project lacks.
+func (d Definition) CheckAvailable(hasFeature func(string) bool) error {
+	if d.RequiresFeature != "" && !hasFeature(d.RequiresFeature) {
+		return fmt.Errorf("%w: %s only runs in projects with the %q feature", ErrUnavailable, d.Type, d.RequiresFeature)
+	}
+	return nil
 }
 
 const (
@@ -92,7 +108,7 @@ func (d Definition) ValidateParams(params map[string]any) error {
 
 	for _, p := range d.ParamsSchema {
 		v, present := params[p.Name]
-		if !present || v == nil || v == "" {
+		if !present || v == nil || v == "" || isEmptyList(v) {
 			if p.Required {
 				return invalid("%s is required", p.Name)
 			}
@@ -120,9 +136,29 @@ func (d Definition) ValidateParams(params map[string]any) error {
 
 func checkValue(p ParamSpec, v any) error {
 	switch p.Type {
-	case "string":
+	case "string", "text":
 		if _, ok := v.(string); !ok {
 			return invalid("%s must be a string", p.Name)
+		}
+	case "column":
+		if s, ok := v.(string); !ok || s == "" {
+			return invalid("%s must be a column name", p.Name)
+		}
+	case "columns":
+		list, ok := v.([]any)
+		if !ok {
+			return invalid("%s must be a list of column names", p.Name)
+		}
+		seen := map[string]bool{}
+		for _, item := range list {
+			s, ok := item.(string)
+			if !ok || s == "" {
+				return invalid("%s must be a list of column names", p.Name)
+			}
+			if seen[s] {
+				return invalid("%s lists %q twice", p.Name, s)
+			}
+			seen[s] = true
 		}
 	case "boolean":
 		if _, ok := v.(bool); !ok {
@@ -169,10 +205,12 @@ func checkValue(p ParamSpec, v any) error {
 		if hi, ok := p.Max.(string); ok && s > hi {
 			return invalid("%s must be %s or earlier", p.Name, hi)
 		}
-	case "dataset":
+	case "dataset", "dataset_name":
+		// dataset picks an existing dataset, dataset_name names a new one;
+		// both follow the dataset naming rule. Existence is the worker's check.
 		s, _ := v.(string)
 		if err := datasets.ValidateName(s); err != nil {
-			return invalid("%s must be a dataset name", p.Name)
+			return invalid("%s must be a dataset name: lowercase letters, digits and underscores, starting with a letter", p.Name)
 		}
 	default:
 		return invalid("%s has unsupported type %q", p.Name, p.Type)
@@ -190,4 +228,9 @@ func less(a, b any) bool {
 	x, _ := a.(string)
 	y, _ := b.(string)
 	return x < y
+}
+
+func isEmptyList(v any) bool {
+	list, ok := v.([]any)
+	return ok && len(list) == 0
 }

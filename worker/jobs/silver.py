@@ -14,6 +14,7 @@ from spark.silver.validator import run as run_validator
     "Bronze -> Silver: reject/quarantine/flag invalid rows, write clean trips.",
     stage="Silver",
     order=20,
+    requires_feature="legacy_taxi",
 )
 def silver(ctx: JobContext) -> None:
     """A period's quarantined rows are not a job failure -- that's what

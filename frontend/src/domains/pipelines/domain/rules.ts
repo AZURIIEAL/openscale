@@ -56,32 +56,51 @@ export function formatRunDuration(
   return finishedAt ? label : `${label} (running)`;
 }
 
-/** The jobs the Pipelines run list shows, in catalog order (the API
- * already sorts by each job's declared order). */
-export function listedJobs(catalog: JobDefinition[]): JobDefinition[] {
-  return catalog.filter((job) => job.listed);
+/** The jobs a project's run list shows, in catalog order (the API already
+ * sorts by each job's declared order): listed ones whose required feature,
+ * if any, the project has. */
+export function listedJobs(catalog: JobDefinition[], hasFeature: (feature: string) => boolean = () => true): JobDefinition[] {
+  return catalog.filter((job) => job.listed && (!job.requiresFeature || hasFeature(job.requiresFeature)));
 }
 
 /** A form's starting values: each field's default, as the string the
- * input edits. */
+ * input edits (a list for `columns` fields). */
 export function initialParamValues(schema: ParamSpec[]): ParamValues {
   const values: ParamValues = {};
   for (const p of schema) {
-    if (p.default !== undefined && p.default !== null) values[p.name] = String(p.default);
+    if (p.type === 'columns') values[p.name] = Array.isArray(p.default) ? p.default.map(String) : [];
+    else if (p.default !== undefined && p.default !== null) values[p.name] = String(p.default);
     else if (p.type === 'boolean') values[p.name] = 'false';
   }
   return values;
 }
 
+function rawValue(values: ParamValues, name: string): string {
+  const v = values[name];
+  return typeof v === 'string' ? v.trim() : '';
+}
+
+function listValue(values: ParamValues, name: string): string[] {
+  const v = values[name];
+  return Array.isArray(v) ? v : [];
+}
+
 /** The typed body POST .../jobs/{type}/run validates: numbers as numbers,
- * booleans as booleans, empty optional fields left out. */
+ * booleans as booleans, column picks as lists, empty optional fields left
+ * out. */
 export function paramsFromValues(schema: ParamSpec[], values: ParamValues): Record<string, unknown> {
   const params: Record<string, unknown> = {};
   for (const p of schema) {
-    const raw = (values[p.name] ?? '').trim();
+    if (p.type === 'columns') {
+      const list = listValue(values, p.name);
+      if (list.length > 0) params[p.name] = list;
+      continue;
+    }
+    // SQL keeps its own whitespace; everything else is trimmed.
+    const raw = p.type === 'text' ? (typeof values[p.name] === 'string' ? (values[p.name] as string) : '') : rawValue(values, p.name);
     if (p.type === 'boolean') {
       if (raw !== '') params[p.name] = raw === 'true';
-    } else if (raw === '') {
+    } else if (raw.trim() === '') {
       continue;
     } else if (p.type === 'number' || p.type === 'integer') {
       params[p.name] = Number(raw);
@@ -94,6 +113,8 @@ export function paramsFromValues(schema: ParamSpec[], values: ParamValues): Reco
 
 const MONTH_PATTERN = /^\d{4}-(0[1-9]|1[0-2])$/;
 const DATE_PATTERN = /^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/;
+/** Mirrors control-plane datasets.ValidateName. */
+const DATASET_NAME_PATTERN = /^[a-z][a-z0-9_]{0,62}$/;
 
 /** The first problem with each field, mirroring the control-plane's
  * jobs.ValidateParams so the form explains itself instead of surfacing a
@@ -103,7 +124,11 @@ export function paramErrors(schema: ParamSpec[], values: ParamValues): Record<st
   const labels = new Map(schema.map((p) => [p.name, p.label]));
 
   for (const p of schema) {
-    const raw = (values[p.name] ?? '').trim();
+    if (p.type === 'columns') {
+      if (p.required && listValue(values, p.name).length === 0) errors[p.name] = 'Pick at least one';
+      continue;
+    }
+    const raw = rawValue(values, p.name);
     if (raw === '') {
       if (p.required) errors[p.name] = 'Required';
       continue;
@@ -121,18 +146,19 @@ export function paramErrors(schema: ParamSpec[], values: ParamValues): Record<st
       else if (typeof p.max === 'string' && raw > p.max) errors[p.name] = `Must be ${p.max} or earlier`;
     } else if (p.type === 'enum' && !(p.options ?? []).includes(raw)) {
       errors[p.name] = 'Pick one of the options';
+    } else if ((p.type === 'dataset_name' || p.type === 'dataset') && !DATASET_NAME_PATTERN.test(raw)) {
+      errors[p.name] = 'Lowercase letters, digits and _; start with a letter';
     }
   }
 
   // Ordering pairs (an end on or after its start), once both sides are valid.
   for (const p of schema) {
     if (!p.gte || errors[p.name] || errors[p.gte]) continue;
-    const a = (values[p.name] ?? '').trim();
-    const b = (values[p.gte] ?? '').trim();
+    const a = rawValue(values, p.name);
+    const b = rawValue(values, p.gte);
     if (a === '' || b === '') continue;
     const before = p.type === 'number' || p.type === 'integer' ? Number(a) < Number(b) : a < b;
     if (before) errors[p.name] = `Must be on or after ${labels.get(p.gte) ?? p.gte}`;
   }
   return errors;
 }
-

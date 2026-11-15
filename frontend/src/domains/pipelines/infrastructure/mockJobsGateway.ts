@@ -10,7 +10,7 @@ import type { JobDefinition, JobRun } from '../domain/entities';
 const MOCK_RUNS: JobRun[] = [
   { id: 'r1', projectId: 'mock', jobType: 'gold', params: {}, state: 'succeeded', submittedAt: '2026-08-11T09:41:02Z' },
   { id: 'r2', projectId: 'mock', jobType: 'features', params: {}, state: 'succeeded', submittedAt: '2026-08-11T09:38:55Z' },
-  { id: 'r3', projectId: 'mock', jobType: 'train', params: {}, state: 'succeeded', submittedAt: '2026-08-11T09:31:20Z' },
+  { id: 'r3', projectId: 'mock', jobType: 'fare_model', params: {}, state: 'succeeded', submittedAt: '2026-08-11T09:31:20Z' },
   {
     id: 'r4',
     projectId: 'mock',
@@ -21,8 +21,8 @@ const MOCK_RUNS: JobRun[] = [
   },
 ];
 
-/** Stands in for GET /api/jobs/catalog: the listed taxi stages as the
- * worker publishes them, plus one unlisted job. */
+/** Stands in for GET /api/jobs/catalog: the taxi stages (legacy_taxi only),
+ * the generic jobs, and one unlisted job, as the worker publishes them. */
 const MOCK_CATALOG: JobDefinition[] = [
   {
     type: 'ingest',
@@ -30,16 +30,32 @@ const MOCK_CATALOG: JobDefinition[] = [
     description: 'Download/validate TLC parquet for a month range, write to Bronze in MinIO.',
     stage: 'Bronze',
     listed: true,
+    requiresFeature: 'legacy_taxi',
     paramsSchema: [
       { name: 'start', type: 'month', label: 'Start', required: true, min: '2009-01' },
       { name: 'end', type: 'month', label: 'End', required: true, min: '2009-01', gte: 'start' },
     ],
   },
-  { type: 'silver', label: 'Validate (Silver)', description: 'Bronze -> Silver.', stage: 'Silver', listed: true, paramsSchema: [] },
-  { type: 'gold', label: 'Aggregate (Gold)', description: 'Silver -> Gold.', stage: 'Gold', listed: true, paramsSchema: [] },
-  { type: 'features', label: 'Compute Features', description: 'Silver -> features.', stage: 'Features', listed: true, paramsSchema: [] },
-  { type: 'train', label: 'Train Fare Model', description: 'Trains and logs a model.', stage: 'Model', listed: true, paramsSchema: [] },
-  { type: 'reset', label: 'Clear Data', description: 'Wipe the lake.', listed: false, paramsSchema: [] },
+  ...(['silver', 'gold', 'features', 'fare_model'] as const).map((type) => ({
+    type,
+    label: type,
+    description: `Taxi stage ${type}.`,
+    listed: true,
+    requiresFeature: 'legacy_taxi',
+    paramsSchema: [],
+  })),
+  {
+    type: 'validate',
+    label: 'Validate',
+    description: "Apply a dataset's quality rules.",
+    stage: 'Quality',
+    listed: true,
+    paramsSchema: [
+      { name: 'dataset', type: 'dataset', label: 'Dataset', required: true },
+      { name: 'output', type: 'dataset_name', label: 'Output dataset', required: true },
+    ],
+  },
+  { type: 'reset', label: 'Clear Data', description: 'Wipe the lake.', listed: false, requiresFeature: 'legacy_taxi', paramsSchema: [] },
 ];
 
 export const mockJobsGateway: JobsGateway = {

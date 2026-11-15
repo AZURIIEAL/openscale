@@ -8,7 +8,7 @@ import { waitForRunTerminal } from './waitForRunTerminal';
 const DONE_RESET_DELAY_MS = 2500;
 
 /** Dependency order -- each stage reads the previous stage's output. */
-export const PIPELINE_ORDER = ['ingest', 'silver', 'gold', 'features', 'train'] as const;
+export const PIPELINE_ORDER = ['ingest', 'silver', 'gold', 'features', 'fare_model'] as const;
 
 export type RunAllState =
   | { phase: 'idle' }

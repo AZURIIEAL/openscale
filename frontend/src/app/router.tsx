@@ -40,18 +40,7 @@ export const router = createBrowserRouter([
         element: <ProjectLayout />,
         children: [
           { index: true, element: <HomeScreen /> },
-          {
-            path: 'pipelines',
-            element: (
-              <RequireFeature
-                feature={FEATURE_LEGACY_TAXI}
-                screenName="Pipelines"
-                description="Per-project pipelines arrive with the generic job registry. Until then only the NYC Taxi sample project has runnable stages."
-              >
-                <PipelinesScreen />
-              </RequireFeature>
-            ),
-          },
+          { path: 'pipelines', element: <PipelinesScreen /> },
           { path: 'sql-editor', element: <SqlEditorScreen /> },
           { path: 'data-catalog', element: <DataCatalogScreen /> },
           { path: 'notebooks', element: <NotebooksScreen /> },

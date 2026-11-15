@@ -14,6 +14,7 @@ from spark.gold.run_gold import run as run_gold
     "Silver -> Gold: daily revenue, hourly demand, zone stats, congestion metrics.",
     stage="Gold",
     order=30,
+    requires_feature="legacy_taxi",
 )
 def gold(ctx: JobContext) -> None:
     """A failure in any one of the 4 Gold jobs stops the batch, so this is

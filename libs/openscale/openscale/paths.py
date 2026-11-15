@@ -4,8 +4,9 @@ a rename never moves a file.
     openscale-lake/
       projects/{project_id}/
         datasets/{dataset_id}/
-          raw/    files exactly as uploaded or downloaded
-          data/   Parquet the query engine reads (part-*.parquet)
+          raw/        files exactly as uploaded or downloaded
+          data/       Parquet the query engine reads (part-*.parquet)
+          quarantine/ rows a validate run set aside, one file per rule
 """
 
 import os
@@ -38,6 +39,17 @@ def data_glob(project_id: str, dataset_id: str) -> str:
     """The Parquet files a query reads. Same string the control-plane
     builds for the query engine (api.DatasetRef)."""
     return s3(data_prefix(project_id, dataset_id) + "*.parquet")
+
+
+def quarantine_prefix(project_id: str, dataset_id: str) -> str:
+    return dataset_prefix(project_id, dataset_id) + "quarantine/"
+
+
+def quarantine_part(project_id: str, dataset_id: str, rule_id: str) -> str:
+    """Where validate writes the rows a rule set aside. Rule ids are free
+    text, so anything outside [A-Za-z0-9._-] becomes '_'."""
+    safe = "".join(c if c.isalnum() or c in "._-" else "_" for c in rule_id)
+    return s3(quarantine_prefix(project_id, dataset_id) + f"{safe}.parquet")
 
 
 def data_part(project_id: str, dataset_id: str, index: int = 0) -> str:

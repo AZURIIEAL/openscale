@@ -15,13 +15,32 @@ scikit-learn.
 
 ## Jobs
 
+**Generic jobs**, available in every project:
+
+| Type | Module | Reads → writes | Params |
+|---|---|---|---|
+| `validate` | `jobs/validate.py` → `libs/openscale/openscale/rules.py` | A dataset + its `rules` → a new dataset of the kept rows (with flag columns), one quarantine file per rule that removed rows, and a per-rule report in the run's metrics | `dataset`, `output` |
+| `sql_transform` | `jobs/sql_transform.py` | One SELECT over the project's ready datasets (each a view named after it) → a new dataset. DuckDB, or Spark for large inputs | `output`, `sql`, `layer`, `engine` |
+| `train` | `jobs/train.py` | A dataset → a gradient-boosting model in the MLflow experiment `openscale/<project slug>`; metrics in the run | `dataset`, `target`, `features` (default: every other numeric/boolean column), `task` (`regression`/`classification`) |
+| `dataset_fetch`, `dataset_ingest` | `jobs/dataset_*.py` | See [Dataset jobs](#dataset-jobs); queued by the datasets API | |
+
+`validate` and `sql_transform` write a **derived** dataset: its `source` is
+`{"kind": "derived", "job", "runId", "inputs"}`, which is the dataset's
+table-level lineage. Re-running one replaces its output; a job never
+overwrites an uploaded or fetched dataset. Both run their SQL in a DuckDB
+session scoped to the project's lake prefix with local files disabled.
+
+**Taxi sample jobs** (`requires_feature="legacy_taxi"`, so only the
+`nyc-taxi` project can run them; Phase 4e rebuilds the sample on the
+generic jobs and deletes these):
+
 | Type | Module | Reads → writes | Params |
 |---|---|---|---|
 | `ingest` | `jobs/ingest.py` → `ingestion/run_ingestion.py` | NYC TLC download → schema check → **Bronze** (MinIO) | `start`, `end` as `YYYY-MM` |
 | `silver` | `jobs/silver.py` → `spark/silver/validator.py` | Bronze → **Silver** + quarantine (MinIO), JSON quality report per month in `docs/quality-reports/` | none |
 | `gold` | `jobs/gold.py` → `spark/gold/run_gold.py` | Silver → **Gold**: daily revenue, hourly demand, zone stats, congestion (MinIO + Postgres) | none |
 | `features` | `jobs/features.py` → `feature_store/feature_jobs/compute_features.py` | Silver → zone × hour features → Postgres (offline) + Redis (online) | none |
-| `train` | `jobs/train.py` → `ml/training/train_fare_model.py` | Silver sample → fare model, logged to MLflow (`ml/mlflow/`) | none |
+| `fare_model` | `jobs/fare_model.py` → `ml/training/train_fare_model.py` | Silver sample → fare model, logged to MLflow. Called `train` before Phase 4b | none |
 | `replay` | `jobs/replay.py` | Silver trips → Kafka `yellow-taxi-trips` at a fixed rate | `limit` (default 500, max 5000), `messagesPerSecond` (default 10, max 100), `date` (optional) |
 | `reset` | `jobs/reset.py` | Deletes Bronze/Silver/Gold in MinIO, Gold/feature tables in Postgres, online features in Redis | none |
 
@@ -143,13 +162,22 @@ def row_count(ctx: JobContext) -> None:
   it `partial`. `raise JobFailed(msg)` stores `msg` as the error. Any other
   exception fails the run with `Type: message`, and the traceback goes to
   the container log.
-- **Param types:** `string`, `number`, `integer`, `boolean`, `enum` (with
-  `options`), `date`, `month`, `dataset` (a dataset name in the run's
-  project). `min`/`max` bound numbers, and also dates/months as ISO
-  strings. `gte="start"` requires a field to be on or after an earlier
+- **Param types:** `string`, `text` (multi-line, e.g. SQL), `number`,
+  `integer`, `boolean`, `enum` (with `options`), `date`, `month`, `dataset`
+  (an existing dataset in the run's project), `dataset_name` (a new one),
+  and `column`/`columns` with `of="<dataset param>"` (picked from that
+  dataset's columns). `min`/`max` bound numbers, and also dates/months as
+  ISO strings. `gte="start"` requires a field to be on or after an earlier
   one. A bad schema raises at import, so the worker won't start with it.
 - **`listed=False`** keeps a job off the Pipelines run list when another
   screen or API queues it (as with `replay`, `reset` and the dataset jobs).
+- **`requires_feature="legacy_taxi"`** limits a job to projects with that
+  feature flag; the control-plane refuses it elsewhere and the Pipelines
+  screen doesn't list it.
+- **Writing a dataset:** claim the output with `db.claim_output_dataset`
+  (source from `datasets.outputs.derived_source`), clear old files with
+  `clear_output_files`, write Parquet under `paths.data_part(...)`, then
+  `finish_output` records schema, size and profile (see `jobs/validate.py`).
 
 ## Known limitations
 

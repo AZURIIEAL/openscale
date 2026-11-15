@@ -98,12 +98,14 @@ def publish_job_definitions(conn, entries: list[dict]) -> None:
             cur.execute(
                 """
                 INSERT INTO control_plane.job_definitions
-                    (type, label, description, stage, params_schema, listed, sort_order, published_at, retired_at)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, now(), NULL)
+                    (type, label, description, stage, params_schema, listed, sort_order, requires_feature,
+                     published_at, retired_at)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, now(), NULL)
                 ON CONFLICT (type) DO UPDATE SET
                     label = EXCLUDED.label, description = EXCLUDED.description, stage = EXCLUDED.stage,
                     params_schema = EXCLUDED.params_schema, listed = EXCLUDED.listed,
-                    sort_order = EXCLUDED.sort_order, published_at = now(), retired_at = NULL
+                    sort_order = EXCLUDED.sort_order, requires_feature = EXCLUDED.requires_feature,
+                    published_at = now(), retired_at = NULL
                 """,
                 (
                     e["type"],
@@ -113,6 +115,7 @@ def publish_job_definitions(conn, entries: list[dict]) -> None:
                     psycopg2.extras.Json(e["params_schema"]),
                     e["listed"],
                     e["sort_order"],
+                    e["requires_feature"],
                 ),
             )
         cur.execute(
@@ -152,3 +155,80 @@ def mark_dataset_failed(conn, dataset_id: str, error: str) -> None:
             "UPDATE control_plane.datasets SET status = 'failed', error = %s, updated_at = now() WHERE id = %s",
             (error[:2000], dataset_id),
         )
+
+
+class OutputConflict(Exception):
+    """The output name belongs to a dataset no job produced (an upload or a
+    URL fetch); a job never overwrites one of those."""
+
+
+_DATASET_COLUMNS = "id::text, name, layer, status, source, columns, rules"
+
+
+def _dataset_row(row) -> dict | None:
+    if row is None:
+        return None
+    keys = ("id", "name", "layer", "status", "source", "columns", "rules")
+    return dict(zip(keys, row))
+
+
+def get_dataset(conn, project_id: str, name: str) -> dict | None:
+    with conn, conn.cursor() as cur:
+        cur.execute(
+            f"SELECT {_DATASET_COLUMNS} FROM control_plane.datasets WHERE project_id = %s AND name = %s",
+            (project_id, name),
+        )
+        return _dataset_row(cur.fetchone())
+
+
+def list_ready_datasets(conn, project_id: str) -> list[dict]:
+    with conn, conn.cursor() as cur:
+        cur.execute(
+            f"SELECT {_DATASET_COLUMNS} FROM control_plane.datasets WHERE project_id = %s AND status = 'ready' ORDER BY name",
+            (project_id,),
+        )
+        return [_dataset_row(r) for r in cur.fetchall()]
+
+
+def claim_output_dataset(conn, project_id: str, name: str, layer: str, source: dict) -> str:
+    """Returns the id of the dataset a job writes its output to, set to
+    pending: a new row, or an existing one an earlier job derived (re-running
+    a transform replaces its output). Raises OutputConflict for a name taken
+    by an uploaded or fetched dataset."""
+    with conn, conn.cursor() as cur:
+        cur.execute(
+            "SELECT id::text, source FROM control_plane.datasets WHERE project_id = %s AND name = %s FOR UPDATE",
+            (project_id, name),
+        )
+        row = cur.fetchone()
+        if row is not None:
+            dataset_id, existing = row
+            if (existing or {}).get("kind") != "derived":
+                raise OutputConflict(
+                    f"dataset {name!r} already exists and was not produced by a job; choose another output name"
+                )
+            cur.execute(
+                """
+                UPDATE control_plane.datasets
+                SET status = 'pending', error = NULL, layer = %s, source = %s, updated_at = now()
+                WHERE id = %s
+                """,
+                (layer, psycopg2.extras.Json(source), dataset_id),
+            )
+            return dataset_id
+        cur.execute(
+            """
+            INSERT INTO control_plane.datasets (project_id, name, layer, status, source)
+            VALUES (%s, %s, %s, 'pending', %s) RETURNING id::text
+            """,
+            (project_id, name, layer, psycopg2.extras.Json(source)),
+        )
+        return cur.fetchone()[0]
+
+
+def get_project_slug(conn, project_id: str) -> str:
+    with conn, conn.cursor() as cur:
+        cur.execute("SELECT slug FROM control_plane.projects WHERE id = %s", (project_id,))
+        row = cur.fetchone()
+        return row[0] if row else project_id
+
