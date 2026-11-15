@@ -22,6 +22,14 @@ export function useCreateProject() {
   });
 }
 
+export function useImportProject() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (bundle: unknown) => gateway.importProject(bundle),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: PROJECTS_QUERY_KEY }),
+  });
+}
+
 export function useArchiveProject() {
   const queryClient = useQueryClient();
   return useMutation({

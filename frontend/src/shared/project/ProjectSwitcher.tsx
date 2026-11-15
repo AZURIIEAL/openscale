@@ -1,5 +1,6 @@
 import { useLocation, useNavigate } from 'react-router-dom';
-import { FolderOpen } from 'lucide-react';
+import { Download, FolderOpen } from 'lucide-react';
+import { API_BASE_URL } from '@/shared/api/httpClient';
 import { useProjectsList } from './useProjects';
 import { parseProjectPath, projectPath } from './rules';
 
@@ -21,31 +22,44 @@ export function ProjectSwitcher() {
   const subpath = parsed?.subpath ?? '';
 
   return (
-    <label className="flex items-center gap-2" title="Switch project">
-      <FolderOpen size={16} strokeWidth={1.75} style={{ color: 'var(--text-muted)', flexShrink: 0 }} aria-hidden="true" />
-      <select
-        aria-label="Project"
-        className="os-well os-font-mono rounded-lg px-2.5 py-1.5 text-[12.5px]"
-        style={{ background: 'transparent', border: 'none', color: 'var(--text-body)', outline: 'none', maxWidth: 200 }}
-        value={currentSlug}
-        onChange={(e) => {
-          const next = e.target.value;
-          if (next === NEW_PROJECT_VALUE) navigate('/projects/new');
-          else if (next) navigate(projectPath(next, subpath));
-        }}
-      >
-        {!currentSlug && (
-          <option value="" disabled>
-            Select a project
-          </option>
-        )}
-        {(projects ?? []).map((p) => (
-          <option key={p.id} value={p.slug}>
-            {p.name}
-          </option>
-        ))}
-        <option value={NEW_PROJECT_VALUE}>+ New project…</option>
-      </select>
-    </label>
+    <div className="flex items-center gap-2">
+      <label className="flex items-center gap-2" title="Switch project">
+        <FolderOpen size={16} strokeWidth={1.75} style={{ color: 'var(--text-muted)', flexShrink: 0 }} aria-hidden="true" />
+        <select
+          aria-label="Project"
+          className="os-well os-font-mono rounded-lg px-2.5 py-1.5 text-[12.5px]"
+          style={{ background: 'transparent', border: 'none', color: 'var(--text-body)', outline: 'none', maxWidth: 200 }}
+          value={currentSlug}
+          onChange={(e) => {
+            const next = e.target.value;
+            if (next === NEW_PROJECT_VALUE) navigate('/projects/new');
+            else if (next) navigate(projectPath(next, subpath));
+          }}
+        >
+          {!currentSlug && (
+            <option value="" disabled>
+              Select a project
+            </option>
+          )}
+          {(projects ?? []).map((p) => (
+            <option key={p.id} value={p.slug}>
+              {p.name}
+            </option>
+          ))}
+          <option value={NEW_PROJECT_VALUE}>+ New project…</option>
+        </select>
+      </label>
+      {currentSlug && (
+        <a
+          href={`${API_BASE_URL}/api/projects/${encodeURIComponent(currentSlug)}/export`}
+          download
+          title="Export this project's definition (URL datasets, rules, pipelines) as a file"
+          aria-label="Export project"
+          style={{ color: 'var(--text-muted)', display: 'flex' }}
+        >
+          <Download size={16} strokeWidth={1.75} aria-hidden="true" />
+        </a>
+      )}
+    </div>
   );
 }

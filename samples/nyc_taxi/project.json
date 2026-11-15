@@ -1,0 +1,189 @@
+{
+  "format": "openscale/project@1",
+  "project": {
+    "slug": "nyc-taxi-sample",
+    "name": "NYC Taxi (sample)",
+    "description": "Sample project: NYC Yellow Taxi trips for January 2025 through the generic jobs (Bronze -> Silver -> Gold -> fare model)."
+  },
+  "datasets": [
+    {
+      "name": "trips",
+      "layer": "bronze",
+      "url": "https://d37ci6vzurychx.cloudfront.net/trip-data/yellow_tripdata_2025-01.parquet",
+      "rules": [
+        {
+          "id": "SLV-001",
+          "tier": "reject",
+          "when": "tpep_pickup_datetime IS NULL",
+          "note": "Missing pickup time"
+        },
+        {
+          "id": "SLV-002",
+          "tier": "reject",
+          "when": "tpep_dropoff_datetime IS NULL",
+          "note": "Missing dropoff time"
+        },
+        {
+          "id": "SLV-003",
+          "tier": "reject",
+          "when": "tpep_dropoff_datetime <= tpep_pickup_datetime",
+          "note": "Dropoff is not after pickup"
+        },
+        {
+          "id": "SLV-004",
+          "tier": "reject",
+          "when": "trip_distance < 0",
+          "note": "Negative trip distance"
+        },
+        {
+          "id": "SLV-010",
+          "tier": "quarantine",
+          "when": "trip_distance > 100",
+          "note": "Trip longer than 100 miles"
+        },
+        {
+          "id": "SLV-005",
+          "tier": "quarantine",
+          "when": "passenger_count <= 0",
+          "note": "No passengers"
+        },
+        {
+          "id": "SLV-006",
+          "tier": "quarantine",
+          "when": "fare_amount < 0",
+          "note": "Negative fare"
+        },
+        {
+          "id": "SLV-007",
+          "tier": "quarantine",
+          "when": "total_amount < 0",
+          "note": "Negative total"
+        },
+        {
+          "id": "SLV-008",
+          "tier": "flag",
+          "when": "year(tpep_pickup_datetime) <> 2025",
+          "column": "flag_pickup_year_mismatch",
+          "note": "Pickup outside 2025"
+        },
+        {
+          "id": "SLV-009",
+          "tier": "flag",
+          "when": "year(tpep_dropoff_datetime) < 2025",
+          "column": "flag_dropoff_year_mismatch",
+          "note": "Dropoff before 2025"
+        },
+        {
+          "id": "MON-passenger_count",
+          "tier": "monitor",
+          "when": "passenger_count IS NULL",
+          "note": "Missing passenger_count"
+        },
+        {
+          "id": "MON-RatecodeID",
+          "tier": "monitor",
+          "when": "RatecodeID IS NULL",
+          "note": "Missing RatecodeID"
+        },
+        {
+          "id": "MON-store_and_fwd_flag",
+          "tier": "monitor",
+          "when": "store_and_fwd_flag IS NULL",
+          "note": "Missing store_and_fwd_flag"
+        },
+        {
+          "id": "MON-congestion_surcharge",
+          "tier": "monitor",
+          "when": "congestion_surcharge IS NULL",
+          "note": "Missing congestion_surcharge"
+        },
+        {
+          "id": "MON-Airport_fee",
+          "tier": "monitor",
+          "when": "Airport_fee IS NULL",
+          "note": "Missing Airport_fee"
+        }
+      ]
+    },
+    {
+      "name": "zones",
+      "layer": "bronze",
+      "url": "https://d37ci6vzurychx.cloudfront.net/misc/taxi_zone_lookup.csv"
+    }
+  ],
+  "pipelines": [
+    {
+      "name": "taxi",
+      "description": "Silver (the quality rules on trips), the four Gold tables, then a fare model.",
+      "steps": [
+        {
+          "jobType": "validate",
+          "params": {
+            "dataset": "trips",
+            "output": "trips_clean"
+          }
+        },
+        {
+          "jobType": "sql_transform",
+          "params": {
+            "output": "daily_revenue",
+            "layer": "gold",
+            "engine": "duckdb",
+            "sql": "SELECT CAST(tpep_pickup_datetime AS DATE) AS pickup_date, COUNT(*) AS trip_count, SUM(total_amount) AS total_revenue, SUM(fare_amount) AS total_fare, SUM(tip_amount) AS total_tips, AVG(fare_amount) AS avg_fare FROM trips_clean WHERE NOT flag_pickup_year_mismatch GROUP BY 1 ORDER BY 1"
+          }
+        },
+        {
+          "jobType": "sql_transform",
+          "params": {
+            "output": "hourly_demand",
+            "layer": "gold",
+            "engine": "duckdb",
+            "sql": "SELECT hour(tpep_pickup_datetime) AS pickup_hour, COUNT(*) AS trip_count, AVG(fare_amount) AS avg_fare, AVG(trip_distance) AS avg_trip_distance, AVG(passenger_count) AS avg_passenger_count FROM trips_clean WHERE NOT flag_pickup_year_mismatch GROUP BY 1 ORDER BY 1"
+          }
+        },
+        {
+          "jobType": "sql_transform",
+          "params": {
+            "output": "zone_stats",
+            "layer": "gold",
+            "engine": "duckdb",
+            "sql": "SELECT t.PULocationID, z.Borough AS borough, z.Zone AS zone, COUNT(*) AS trip_count, SUM(t.total_amount) AS total_revenue, AVG(t.fare_amount) AS avg_fare, AVG(t.trip_distance) AS avg_trip_distance, AVG(t.tip_amount) AS avg_tip FROM trips_clean t LEFT JOIN zones z ON z.LocationID = t.PULocationID GROUP BY 1, 2, 3 ORDER BY trip_count DESC"
+          }
+        },
+        {
+          "jobType": "sql_transform",
+          "params": {
+            "output": "congestion_metrics",
+            "layer": "gold",
+            "engine": "duckdb",
+            "sql": "SELECT CAST(tpep_pickup_datetime AS DATE) AS pickup_date, COUNT(*) AS trip_count, COUNT(*) FILTER (WHERE COALESCE(congestion_surcharge, 0) > 0) AS trips_with_congestion, SUM(congestion_surcharge) AS total_congestion_surcharge, 100.0 * COUNT(*) FILTER (WHERE COALESCE(congestion_surcharge, 0) > 0) / COUNT(*) AS congestion_trip_pct FROM trips_clean WHERE NOT flag_pickup_year_mismatch GROUP BY 1 ORDER BY 1"
+          }
+        },
+        {
+          "jobType": "sql_transform",
+          "params": {
+            "output": "fare_training",
+            "layer": "silver",
+            "engine": "duckdb",
+            "sql": "SELECT trip_distance, PULocationID, DOLocationID, passenger_count, hour(tpep_pickup_datetime) AS pickup_hour, fare_amount FROM trips_clean WHERE fare_amount BETWEEN 0 AND 500"
+          }
+        },
+        {
+          "jobType": "train",
+          "params": {
+            "dataset": "fare_training",
+            "target": "fare_amount",
+            "features": [
+              "trip_distance",
+              "PULocationID",
+              "DOLocationID",
+              "passenger_count",
+              "pickup_hour"
+            ],
+            "task": "regression"
+          }
+        }
+      ]
+    }
+  ]
+}

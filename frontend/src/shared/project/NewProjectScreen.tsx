@@ -2,7 +2,7 @@ import { useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Panel } from '@/shared/design-system/Panel';
 import { RunButton } from '@/shared/design-system/RunButton';
-import { useCreateProject } from './useProjects';
+import { useCreateProject, useImportProject } from './useProjects';
 import { isValidSlug, projectPath, slugify } from './rules';
 
 const inputClass = 'os-well rounded-lg px-3 py-2 text-[13px] w-full';
@@ -12,6 +12,8 @@ const inputStyle = { background: 'transparent', border: 'none', color: 'var(--te
 export function NewProjectScreen() {
   const navigate = useNavigate();
   const create = useCreateProject();
+  const importer = useImportProject();
+  const [fileError, setFileError] = useState('');
   const [name, setName] = useState('');
   const [slug, setSlug] = useState('');
   const [slugTouched, setSlugTouched] = useState(false);
@@ -28,6 +30,24 @@ export function NewProjectScreen() {
       { onSuccess: (project) => navigate(projectPath(project.slug), { replace: true }) },
     );
   }
+
+  // A project file (an export, or samples/nyc_taxi/project.json). Name and
+  // slug typed above win over the file's, so a file can be imported twice.
+  async function onImport(file: File) {
+    setFileError('');
+    let bundle: { project?: Record<string, unknown> };
+    try {
+      bundle = JSON.parse(await file.text());
+    } catch {
+      setFileError(`${file.name} is not a JSON project file.`);
+      return;
+    }
+    const project = { ...bundle.project };
+    if (name.trim()) Object.assign(project, { name: name.trim(), slug: effectiveSlug });
+    if (description.trim()) project.description = description.trim();
+    importer.mutate({ ...bundle, project }, { onSuccess: (p) => navigate(projectPath(p.slug), { replace: true }) });
+  }
+  const importError = fileError || (importer.error?.message.replace(/^\w+ \S+ failed: \d+ /, '') ?? '');
 
   return (
     <Panel className="mx-auto flex max-w-lg flex-col gap-4 p-6">
@@ -94,6 +114,29 @@ export function NewProjectScreen() {
           </button>
         </div>
       </form>
+
+      <div className="flex flex-col gap-1 border-t pt-4" style={{ borderColor: 'var(--border-subtle)' }}>
+        <label className="flex flex-wrap items-center gap-3 text-[13px]" style={{ color: 'var(--text-muted)' }}>
+          <span>Or import a project file (an export, or the NYC Taxi sample in samples/nyc_taxi/project.json):</span>
+          <input
+            type="file"
+            accept=".json,application/json"
+            aria-label="Import a project file"
+            disabled={importer.isPending}
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              e.target.value = '';
+              if (file) void onImport(file);
+            }}
+          />
+        </label>
+        {importer.isPending && <span className="text-[12px]" style={{ color: 'var(--text-muted)' }}>Importing…</span>}
+        {importError && (
+          <p className="m-0 text-[13px]" style={{ color: 'var(--danger)' }}>
+            {importError}
+          </p>
+        )}
+      </div>
     </Panel>
   );
 }
